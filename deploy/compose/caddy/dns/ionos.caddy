@@ -1,0 +1,2 @@
+# IONOS API key: the public prefix and the secret, joined by a dot.
+dns ionos {env.IONOS_API_TOKEN}

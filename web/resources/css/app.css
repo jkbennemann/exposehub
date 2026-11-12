@@ -1,0 +1,1425 @@
+@import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
+@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * The look comes from the hardware a tunnel stands in for: patch cables and
+ * the signs in road tunnels. Cable yellow is the jacket colour of single-mode
+ * fibre and marks the one thing this product makes, a connection. Aqua, the
+ * multimode jacket, means a connection is carrying traffic right now. Type is
+ * Barlow, drawn from highway and equipment lettering; addresses, tokens and
+ * commands are set in a monospace because people copy them character by
+ * character.
+ */
+@theme {
+    --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+    --font-display: var(--font-barlow-semi-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+    --font-mono: var(--font-spline-sans-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+    --color-cable: #ffc531;
+    --color-ink: #15173d;
+    --color-live: #14b8b0;
+    --color-fault: #e5484d;
+
+    /* Flux reads the zinc scale; this one leans toward the indigo ink. */
+    --color-zinc-50: #f5f6f9;
+    --color-zinc-100: #ebedf2;
+    --color-zinc-200: #d9dce6;
+    --color-zinc-300: #bec3d3;
+    --color-zinc-400: #9197ae;
+    --color-zinc-500: #696e8a;
+    --color-zinc-600: #4b4f6d;
+    --color-zinc-700: #2f3260;
+    --color-zinc-800: #1c1f49;
+    --color-zinc-900: #15173d;
+    --color-zinc-950: #0d0f2b;
+
+    /* Yellow is a fill, never a text colour on a light surface. */
+    --color-accent: var(--color-cable);
+    --color-accent-content: var(--color-ink);
+    --color-accent-foreground: var(--color-ink);
+}
+
+@layer theme {
+    .dark {
+        --color-accent: var(--color-cable);
+        --color-accent-content: var(--color-cable);
+        --color-accent-foreground: var(--color-ink);
+    }
+}
+
+@layer base {
+
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-zinc-200, currentColor);
+    }
+
+    body {
+        font-size: 1.0625rem;
+        line-height: 1.55;
+    }
+}
+
+[data-flux-field]:not(ui-radio, ui-checkbox) {
+    @apply grid gap-2;
+}
+
+[data-flux-label] {
+    @apply  !mb-0 !leading-tight;
+}
+
+input:focus[data-flux-control],
+textarea:focus[data-flux-control],
+select:focus[data-flux-control] {
+    @apply outline-hidden ring-2 ring-accent-content ring-offset-2 ring-offset-white dark:ring-offset-zinc-900;
+}
+
+/* Page titles: the signage face, tight and heavy. */
+.page-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2rem, 1.4rem + 2vw, 2.75rem);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+}
+
+/*
+ * The wire: a cable between two jacks. It is the only decorative element in
+ * the app and it always stands for a connection. On first paint it is laid
+ * from the local end to the public end, once.
+ */
+.wire-line {
+    transform-origin: left center;
+    animation: wire-lay 700ms cubic-bezier(0.2, 0.7, 0.2, 1) 150ms both;
+}
+
+.wire-jack-end {
+    animation: wire-seat 200ms ease-out 800ms both;
+}
+
+@keyframes wire-lay {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+@keyframes wire-seat {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
+@media (max-width: 639px) {
+    .wire-line { transform-origin: center top; }
+
+    @keyframes wire-lay {
+        from { transform: scaleY(0); }
+        to { transform: scaleY(1); }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wire-line,
+    .wire-jack-end {
+        animation: none;
+    }
+}
+
+/*
+ * Long-form text from the operator's Markdown: imprint and privacy notice.
+ * One readable column; headings in the signage face.
+ */
+.legal {
+    max-width: 68ch;
+}
+
+.legal h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2rem, 1.4rem + 2vw, 2.75rem);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 1.5rem;
+}
+
+.legal h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    margin-top: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.legal h3 {
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.legal p,
+.legal ul,
+.legal ol,
+.legal table {
+    margin-bottom: 1rem;
+}
+
+.legal ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+}
+
+.legal ol {
+    list-style: decimal;
+    padding-left: 1.25rem;
+}
+
+.legal li + li {
+    margin-top: 0.25rem;
+}
+
+.legal a {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.legal table {
+    width: 100%;
+    font-size: 0.9375rem;
+    border-collapse: collapse;
+}
+
+.legal th,
+.legal td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--color-zinc-200);
+}
+
+.dark .legal th,
+.dark .legal td {
+    border-bottom-color: var(--color-zinc-700);
+}
+
+.legal code {
+    font-family: var(--font-mono);
+    font-size: 0.95em;
+}
+
+/*
+ * The film on the landing page: five scenes played on one cable. Left is the
+ * visitor's own machine, right is the outside world, and what travels between
+ * them is drawn as packets on the cable. Requests come in dark, answers go
+ * back in aqua (the colour for live traffic), and what is turned away is red.
+ *
+ * Only the active scene's elements are displayed. Displaying an element
+ * starts its animation from the beginning, so switching scenes needs no
+ * script beyond changing data-scene.
+ */
+.film {
+    --film-scene: 6s;
+    --film-beat: 2s;
+}
+
+.film .scene {
+    display: none;
+}
+
+/* The one rule that shows a scene. An element that needs another display type
+   says so through --scene-display, never through a display rule of its own:
+   such a rule would also apply while its scene is not playing. */
+.film[data-scene='0'] .s0,
+.film[data-scene='1'] .s1,
+.film[data-scene='2'] .s2,
+.film[data-scene='3'] .s3,
+.film[data-scene='4'] .s4 {
+    display: var(--scene-display, block);
+}
+
+.film-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(7rem, 1.15fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+    padding-block: 2.5rem;
+    border-block: 1px solid var(--color-zinc-200);
+    min-height: 19rem;
+}
+
+.dark .film-stage {
+    border-color: var(--color-zinc-700);
+}
+
+/* Left: the machine, as the agent's own output. */
+.film-local {
+    border-radius: 0.375rem;
+    background: var(--color-zinc-900);
+    color: var(--color-zinc-100);
+    padding: 1rem 1.125rem 1.125rem;
+    min-height: 11.5rem;
+}
+
+.dark .film-local {
+    background: var(--color-zinc-950);
+    box-shadow: 0 0 0 1px var(--color-zinc-700);
+}
+
+.film-local-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    font-size: 0.875rem;
+    color: var(--color-zinc-400);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-zinc-700);
+}
+
+.film-local-head .font-mono {
+    color: var(--color-cable);
+}
+
+.film-log {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.9;
+}
+
+.film-log li {
+    display: flex;
+    gap: 0.75rem;
+    opacity: 0;
+    animation: film-line-in 400ms ease-out calc(var(--film-beat) * var(--i) + 1.1s) forwards;
+}
+
+.film-log b {
+    font-weight: 500;
+    color: var(--color-zinc-400);
+    min-width: 2.75rem;
+}
+
+.film-log i {
+    font-style: normal;
+    margin-left: auto;
+    color: var(--color-live);
+}
+
+.film-log .film-log-note {
+    font-family: var(--font-sans);
+    color: var(--color-zinc-400);
+}
+
+/* Middle: the cable. The line is a container, so packets can travel its full
+   length whatever that is, across on wide screens and down on narrow ones. */
+.film-cable {
+    display: flex;
+    align-items: center;
+}
+
+.film-jack {
+    position: relative;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    background: var(--color-cable);
+}
+
+.film-jack::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 9999px;
+    background: var(--color-ink);
+}
+
+.film-line {
+    position: relative;
+    flex: 1;
+    height: 2.5rem;
+    margin-inline: -0.25rem;
+    container-type: size;
+}
+
+.film-line::before {
+    content: '';
+    position: absolute;
+    inset: calc(50% - 2px) 0;
+    background: var(--color-cable);
+    transform-origin: left center;
+    animation: wire-lay 700ms cubic-bezier(0.2, 0.7, 0.2, 1) 150ms both;
+}
+
+.film-packet {
+    position: absolute;
+    top: calc(50% - 0.4375rem);
+    left: -0.4375rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 9999px;
+    border: 2px solid var(--color-zinc-50);
+    opacity: 0;
+    animation-duration: var(--film-beat);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-delay: calc(var(--film-beat) / 3 * var(--i) + 0.9s);
+}
+
+.dark .film-packet {
+    border-color: var(--color-zinc-900);
+}
+
+/* A request: from the outside world (right) to the machine (left). */
+.film-in {
+    background: var(--color-zinc-900);
+    animation-name: film-in;
+}
+
+.dark .film-in {
+    background: #fff;
+}
+
+/* Its answer: back out, a moment later. */
+.film-out {
+    background: var(--color-live);
+    animation-name: film-out;
+    animation-delay: calc(var(--film-beat) / 3 * var(--i) + 0.9s + var(--film-beat) / 2);
+}
+
+.film-stopped {
+    background: var(--color-fault);
+    animation-name: film-stopped;
+}
+
+.film-key {
+    background: var(--color-cable);
+    border-color: var(--color-ink);
+}
+
+.film-gate {
+    --scene-display: grid;
+    position: absolute;
+    top: calc(50% - 1.125rem);
+    left: calc(50% - 1.125rem);
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.375rem;
+    background: var(--color-ink);
+    color: var(--color-cable);
+    z-index: 1;
+    animation: film-pop 350ms cubic-bezier(0.2, 1.4, 0.4, 1) 0.5s both;
+}
+
+.film-gate svg {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+/* Right: the outside world, different in every scene. */
+.film-remote {
+    min-width: 0;
+}
+
+.film-window,
+.film-phone {
+    border-radius: 0.375rem;
+    border: 2px solid var(--color-zinc-900);
+    background: #fff;
+    overflow: hidden;
+    animation: film-pop 400ms cubic-bezier(0.2, 1.2, 0.4, 1) 0.2s both;
+}
+
+.dark .film-window,
+.dark .film-phone {
+    border-color: var(--color-zinc-300);
+    background: var(--color-zinc-800);
+}
+
+.film-phone {
+    width: 9.5rem;
+    margin-inline: auto;
+    border-radius: 1.25rem;
+    border-width: 3px;
+}
+
+.film-address {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    border-bottom: 2px solid var(--color-zinc-900);
+    overflow-wrap: anywhere;
+}
+
+.dark .film-address {
+    border-color: var(--color-zinc-300);
+}
+
+.film-phone .film-address {
+    text-align: center;
+    font-size: 0.6875rem;
+    padding-top: 0.875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.film-page {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.875rem 0.75rem 1rem;
+}
+
+.film-phone .film-page {
+    min-height: 8.5rem;
+    align-content: start;
+}
+
+.film-page span {
+    display: block;
+    height: 0.625rem;
+    width: var(--w);
+    border-radius: 2px;
+    background: var(--color-zinc-300);
+    transform-origin: left center;
+    transform: scaleX(0);
+    animation: film-fill 500ms ease-out calc(0.5s * var(--i) + 2.1s) forwards;
+}
+
+.dark .film-page span {
+    background: var(--color-zinc-600);
+}
+
+.film-page span:first-child {
+    height: 1rem;
+    background: var(--color-zinc-900);
+}
+
+.dark .film-page span:first-child {
+    background: var(--color-zinc-100);
+}
+
+.film-senders {
+    --scene-display: grid;
+    gap: 0.75rem;
+}
+
+.film-senders div {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0.625rem 0.75rem;
+    border-left: 4px solid var(--color-zinc-900);
+    background: #fff;
+    animation: film-send var(--film-beat) ease-out calc(var(--film-beat) / 2 * var(--i) + 0.6s) infinite;
+}
+
+.dark .film-senders div {
+    border-color: var(--color-zinc-300);
+    background: var(--color-zinc-800);
+}
+
+.film-senders span {
+    font-weight: 500;
+}
+
+.film-senders code,
+.film-strangers code {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}
+
+.film-senders code {
+    color: var(--color-zinc-500);
+}
+
+.dark .film-senders code {
+    color: var(--color-zinc-400);
+}
+
+.film-strangers {
+    --scene-display: grid;
+    gap: 0.5rem;
+}
+
+.film-strangers li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-zinc-200);
+    opacity: 0;
+    animation: film-line-in 350ms ease-out calc(var(--film-beat) / 3 * var(--i) + 0.9s) forwards;
+}
+
+.dark .film-strangers li {
+    border-color: var(--color-zinc-700);
+}
+
+.film-strangers b {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-fault);
+}
+
+.film-strangers .film-welcome b {
+    color: var(--color-live);
+}
+
+.film-domain .film-address {
+    position: relative;
+    min-height: 2.25rem;
+}
+
+.film-domain-old {
+    animation: film-leave 500ms ease-in 1.6s forwards;
+}
+
+.film-domain-new {
+    position: absolute;
+    inset: 0.5rem 0.75rem auto;
+    font-weight: 500;
+    opacity: 0;
+    animation: film-line-in 500ms ease-out 2.1s forwards;
+}
+
+.film-cert {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 0.75rem 1.125rem;
+    font-weight: 500;
+    opacity: 0;
+    animation: film-line-in 400ms ease-out 3s forwards;
+}
+
+.film-cert svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--color-live);
+}
+
+.film-cert path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: film-draw 500ms ease-out 3.2s forwards;
+}
+
+/* The list of scenes: the words for what the stage shows, and its control. */
+.film-scenes {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.film-scenes button {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding-top: 1rem;
+    text-align: left;
+    color: var(--color-zinc-500);
+    border-top: 3px solid var(--color-zinc-200);
+    cursor: pointer;
+}
+
+.dark .film-scenes button {
+    color: var(--color-zinc-400);
+    border-color: var(--color-zinc-700);
+}
+
+.film-scenes button:hover,
+.film-scenes button[aria-current] {
+    color: var(--color-zinc-900);
+}
+
+.dark .film-scenes button:hover,
+.dark .film-scenes button[aria-current] {
+    color: #fff;
+}
+
+.film-scenes button:focus-visible {
+    outline: 2px solid var(--color-accent-content);
+    outline-offset: 4px;
+}
+
+/* The cable runs along the top of the scene that is playing, for as long as it plays. */
+.film-scenes button[aria-current]::before {
+    content: '';
+    position: absolute;
+    inset: -3px 0 auto;
+    height: 3px;
+    background: var(--color-cable);
+    transform-origin: left center;
+    animation: film-progress var(--film-scene) linear both;
+}
+
+.film-scene-title {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.film-scene-text {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+}
+
+.film-scenes button:not([aria-current]) .film-scene-text {
+    color: var(--color-zinc-500);
+}
+
+.dark .film-scenes button:not([aria-current]) .film-scene-text {
+    color: var(--color-zinc-400);
+}
+
+/* Held while someone reads: everything stops where it is. */
+.film-paused * {
+    animation-play-state: paused;
+}
+
+.film-paused .film-scenes button[aria-current]::before {
+    animation-play-state: paused;
+}
+
+@keyframes film-in {
+    0% { transform: translateX(100cqw); opacity: 0; }
+    8% { opacity: 1; }
+    42% { transform: translateX(0); opacity: 1; }
+    50%, 100% { transform: translateX(0); opacity: 0; }
+}
+
+@keyframes film-out {
+    0% { transform: translateX(0); opacity: 0; }
+    8% { opacity: 1; }
+    42% { transform: translateX(100cqw); opacity: 1; }
+    50%, 100% { transform: translateX(100cqw); opacity: 0; }
+}
+
+@keyframes film-stopped {
+    0% { transform: translateX(100cqw); opacity: 0; }
+    8% { opacity: 1; }
+    24% { transform: translateX(58cqw); opacity: 1; }
+    40% { transform: translateX(78cqw); opacity: 0; }
+    100% { transform: translateX(78cqw); opacity: 0; }
+}
+
+@keyframes film-line-in {
+    from { opacity: 0; transform: translateY(0.375rem); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes film-leave {
+    to { opacity: 0; transform: translateY(-0.375rem); }
+}
+
+@keyframes film-fill {
+    to { transform: scaleX(1); }
+}
+
+@keyframes film-pop {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes film-send {
+    0%, 100% { transform: none; }
+    12% { transform: translateX(-0.375rem); }
+    30% { transform: none; }
+}
+
+@keyframes film-draw {
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes film-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+/* Narrow screens: machine on top, cable running down, the outside world below. */
+@media (max-width: 767px) {
+    .film-stage {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+        min-height: 0;
+    }
+
+    .film-cable {
+        flex-direction: column;
+        height: 7.5rem;
+        margin-block: -0.125rem;
+    }
+
+    .film-line {
+        flex: 1;
+        width: 2.5rem;
+        height: auto;
+        margin: -0.25rem 0;
+    }
+
+    .film-line::before {
+        inset: 0 calc(50% - 2px);
+        transform-origin: center top;
+    }
+
+    .film-packet {
+        top: -0.4375rem;
+        left: calc(50% - 0.4375rem);
+    }
+
+    .film-in { animation-name: film-in-down; }
+    .film-out { animation-name: film-out-down; }
+    .film-stopped { animation-name: film-stopped-down; }
+
+    .film-remote {
+        min-height: 12rem;
+    }
+
+    .film-scenes {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .film-scenes button {
+        padding-block: 0.875rem;
+    }
+
+    .film-scenes button:not([aria-current]) .film-scene-text {
+        display: none;
+    }
+
+    @keyframes film-in-down {
+        0% { transform: translateY(100cqh); opacity: 0; }
+        8% { opacity: 1; }
+        42% { transform: translateY(0); opacity: 1; }
+        50%, 100% { transform: translateY(0); opacity: 0; }
+    }
+
+    @keyframes film-out-down {
+        0% { transform: translateY(0); opacity: 0; }
+        8% { opacity: 1; }
+        42% { transform: translateY(100cqh); opacity: 1; }
+        50%, 100% { transform: translateY(100cqh); opacity: 0; }
+    }
+
+    @keyframes film-stopped-down {
+        0% { transform: translateY(100cqh); opacity: 0; }
+        8% { opacity: 1; }
+        24% { transform: translateY(58cqh); opacity: 1; }
+        40%, 100% { transform: translateY(78cqh); opacity: 0; }
+    }
+}
+
+/* No motion wanted: every scene is shown finished, and nothing advances by itself. */
+@media (prefers-reduced-motion: reduce) {
+    .film *,
+    .film *::before {
+        animation: none !important;
+    }
+
+    .film-log li,
+    .film-strangers li,
+    .film-domain-new,
+    .film-cert {
+        opacity: 1;
+    }
+
+    .film-page span {
+        transform: none;
+    }
+
+    .film-cert path {
+        stroke-dashoffset: 0;
+    }
+
+    .film .film-domain-old,
+    .film .film-packet {
+        display: none;
+    }
+}
+
+/*
+ * The inspector preview on the dashboard's Inspector page: a scaled-down copy
+ * of the page the agent serves, always in its dark look. On first paint the
+ * requests arrive one after another, oldest first, the way they do in the
+ * real thing.
+ */
+.mock {
+    --m-bg: #0f1130;
+    --m-panel: #15173d;
+    --m-line: #2f3260;
+    --m-text: #ebedf2;
+    --m-muted: #9197ae;
+    --m-faint: #696e8a;
+
+    overflow: hidden;
+    border-radius: 0.5rem;
+    background: var(--m-bg);
+    color: var(--m-text);
+    box-shadow: 0 0 0 1px var(--m-line), 0 24px 60px -30px rgb(13 15 43 / 0.55);
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+.mock-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.7rem 1.1rem;
+    background: var(--m-panel);
+    border-bottom: 1px solid var(--m-line);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    min-width: 0;
+}
+
+.mock-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: none;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+.mock-brand i {
+    width: 1.5rem;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--color-cable);
+    box-shadow: -3px 0 0 1px var(--color-cable), 3px 0 0 1px var(--color-cable);
+}
+
+.mock-brand em { font-style: normal; color: var(--m-muted); }
+
+.mock-tunnel {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.mock-tunnel > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-tunnel i { flex: none; width: 2rem; height: 3px; border-radius: 2px; background: var(--color-cable); }
+
+.mock-live { flex: none; display: flex; align-items: center; gap: 0.4rem; color: var(--m-muted); font-family: var(--font-sans); }
+.mock-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--color-live); box-shadow: 0 0 0 4px rgb(20 184 176 / 0.25); }
+
+.mock-stats {
+    display: flex;
+    flex-wrap: wrap;
+    background: var(--m-panel);
+    border-bottom: 1px solid var(--m-line);
+}
+
+.mock-stats > span {
+    padding: 0.55rem 1.1rem;
+    border-right: 1px solid var(--m-line);
+    color: var(--m-muted);
+    font-size: 0.75rem;
+}
+
+.mock-stats b {
+    display: block;
+    color: var(--m-text);
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 600;
+    line-height: 1.15;
+}
+
+.mock-stats .mock-bad b { color: #f06a6e; }
+
+.mock-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+.mock-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-right: 1px solid var(--m-line);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+}
+
+.mock-row {
+    display: grid;
+    grid-template-columns: 4.6rem 3rem minmax(0, 1fr) 2.2rem 3.6rem;
+    gap: 0.6rem;
+    padding: 0.45rem 1.1rem;
+    border-bottom: 1px solid rgb(47 50 96 / 0.6);
+    animation: mock-arrive 900ms ease-out calc(var(--i) * 260ms + 300ms) both;
+}
+
+.mock-row > span:nth-child(4), .mock-row > span:nth-child(5) { text-align: right; }
+.mock-row.is-selected { background: #262a5c; box-shadow: inset 3px 0 0 var(--color-cable); }
+.mock-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@keyframes mock-arrive {
+    0% { opacity: 0; background: rgb(255 197 49 / 0.3); }
+    25% { opacity: 1; background: rgb(255 197 49 / 0.3); }
+    100% { opacity: 1; }
+}
+
+.mock-muted { color: var(--m-muted); }
+.mock-faint { color: var(--m-faint); }
+.mock-s2 { color: var(--color-live); }
+.mock-s4 { color: var(--color-cable); }
+.mock-s5 { color: #f06a6e; }
+
+.mock-detail { padding: 1rem 1.25rem 1.25rem; min-width: 0; }
+
+.mock-headline {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.mock-headline .mock-muted { margin-right: 0.35rem; }
+.mock-headline .mock-s2 { margin-left: 0.5rem; }
+
+.mock-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+
+.mock-actions span {
+    padding: 0.2rem 0.65rem;
+    border: 1px solid var(--m-line);
+    border-radius: 6px;
+    background: #1c1f49;
+    font-size: 0.8125rem;
+}
+
+.mock-actions .mock-primary { background: var(--color-cable); border-color: var(--color-cable); color: var(--color-ink); font-weight: 500; }
+
+.mock-headers {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.15rem 1rem;
+    margin: 1rem 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.mock-headers dt { color: var(--m-muted); }
+.mock-headers dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mock-body {
+    margin: 0.9rem 0 0;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--m-line);
+    border-radius: 6px;
+    background: var(--m-panel);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.55;
+    white-space: pre;
+    overflow: hidden;
+}
+
+.mock-body .p { color: var(--m-faint); }
+.mock-body .s { color: var(--color-live); }
+.mock-body .n { color: var(--color-cable); }
+.mock-body .l { color: #f06a6e; }
+
+.kbd {
+    display: inline-block;
+    min-width: 1.6rem;
+    padding: 0 0.35rem;
+    border: 1px solid var(--color-zinc-300);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    text-align: center;
+    color: var(--color-zinc-900);
+    background: #fff;
+}
+
+.dark .kbd { border-color: var(--color-zinc-600); color: #fff; background: var(--color-zinc-800); }
+
+@media (max-width: 767px) {
+    .mock-split { grid-template-columns: minmax(0, 1fr); }
+    .mock-rows { border-right: 0; }
+    .mock-detail, .mock-tunnel, .mock-live { display: none; }
+    .mock-row { grid-template-columns: 2.8rem minmax(0, 1fr) 2.2rem 3.4rem; }
+    .mock-row > span:first-child { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mock-row { animation: none; }
+}
+
+/*
+ * Admin: the operator rail. Its sections sit on one cable like jacks; the line
+ * runs behind the jacks, the open section's jack is plugged in (filled).
+ */
+.admin-jacks ul::before {
+    content: "";
+    position: absolute;
+    left: 1.1rem;
+    right: 1.1rem;
+    top: 0.62rem;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--color-zinc-700);
+}
+
+.admin-jack {
+    position: relative;
+    display: block;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 9999px;
+    background: var(--color-zinc-950);
+    box-shadow: inset 0 0 0 2px var(--color-zinc-500);
+}
+
+.admin-jack.is-on {
+    background: var(--color-cable);
+    box-shadow: inset 0 0 0 3px var(--color-cable), 0 0 0 4px color-mix(in srgb, var(--color-cable) 22%, transparent);
+}
+
+.admin-jack.is-on::after {
+    content: "";
+    position: absolute;
+    inset: 0.3rem;
+    border-radius: 9999px;
+    background: var(--color-ink);
+}
+
+/* The service diagram on the admin overview: three nodes on one cable. */
+.admin-link {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-cable);
+}
+
+.admin-link.is-stale {
+    background: repeating-linear-gradient(90deg, var(--color-zinc-400) 0 10px, transparent 10px 18px);
+}
+
+.admin-link.is-down {
+    background: repeating-linear-gradient(90deg, var(--color-fault) 0 10px, transparent 10px 18px);
+}
+
+/* On a phone the nodes stack, so the cable runs down between them. */
+@media (max-width: 39.99rem) {
+    .admin-link {
+        width: 4px;
+        height: 2rem;
+    }
+
+    .admin-link.is-stale {
+        background: repeating-linear-gradient(180deg, var(--color-zinc-400) 0 8px, transparent 8px 14px);
+    }
+
+    .admin-link.is-down {
+        background: repeating-linear-gradient(180deg, var(--color-fault) 0 8px, transparent 8px 14px);
+    }
+}
+
+/*
+ * Docs. The contents list is one cable down the page with a jack per section;
+ * the section being read is plugged in. The article uses the dashboard's ruled,
+ * quiet style: headings in Barlow Semi Condensed, commands in dark bars.
+ */
+.docs-cable {
+    position: relative;
+    display: grid;
+    gap: 0.15rem;
+}
+
+.docs-cable::before {
+    content: "";
+    position: absolute;
+    left: 0.4rem;
+    top: 0.75rem;
+    bottom: 0.75rem;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--color-zinc-300);
+}
+
+.dark .docs-cable::before {
+    background: var(--color-zinc-700);
+}
+
+.docs-cable a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.3rem 0;
+    color: var(--color-zinc-500);
+    font-size: 0.95rem;
+}
+
+.docs-cable a:hover,
+.docs-cable a[aria-current] {
+    color: var(--color-zinc-900);
+}
+
+.dark .docs-cable a {
+    color: var(--color-zinc-400);
+}
+
+.dark .docs-cable a:hover,
+.dark .docs-cable a[aria-current] {
+    color: var(--color-white);
+}
+
+.docs-jack {
+    position: relative;
+    flex: none;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 9999px;
+    background: var(--color-zinc-50);
+    box-shadow: inset 0 0 0 2px var(--color-zinc-400);
+}
+
+.dark .docs-jack {
+    background: var(--color-zinc-900);
+    box-shadow: inset 0 0 0 2px var(--color-zinc-500);
+}
+
+.docs-cable a[aria-current] .docs-jack {
+    background: var(--color-cable);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-cable) 22%, transparent);
+}
+
+.docs-cable a[aria-current] .docs-jack::after {
+    content: "";
+    position: absolute;
+    inset: 0.3rem;
+    border-radius: 9999px;
+    background: var(--color-ink);
+}
+
+.docs section {
+    scroll-margin-top: 2rem;
+    padding-bottom: 3.5rem;
+    margin-bottom: 3.5rem;
+    border-bottom: 1px solid var(--color-zinc-200);
+}
+
+.dark .docs section {
+    border-color: var(--color-zinc-700);
+}
+
+.docs section:last-child {
+    border-bottom: 0;
+}
+
+.docs h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 2rem;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+}
+
+.docs h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.35rem;
+    line-height: 1.2;
+    margin-top: 2rem;
+}
+
+.docs p,
+.docs ul,
+.docs dl,
+.docs pre,
+.docs [data-command],
+.docs .space-y-3 {
+    margin-top: 1rem;
+}
+
+.docs p,
+.docs li,
+.docs dd {
+    /* Barlow joins "--" into a dash; the docs name flags like --allow in running text. */
+    font-variant-ligatures: no-common-ligatures no-contextual;
+    line-height: 1.65;
+    color: var(--color-zinc-700);
+}
+
+.dark .docs p,
+.dark .docs li,
+.dark .docs dd {
+    color: var(--color-zinc-300);
+}
+
+.docs ul {
+    list-style: none;
+    padding: 0;
+}
+
+.docs ul > li {
+    position: relative;
+    padding-left: 1.4rem;
+    margin-top: 0.5rem;
+}
+
+.docs ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0.2rem;
+    top: 0.72em;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    background: var(--color-cable);
+}
+
+.docs a {
+    color: var(--color-zinc-900);
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: var(--color-cable);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+}
+
+.dark .docs a {
+    color: var(--color-white);
+}
+
+.docs code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+}
+
+/* A real sequence, so numbered: the numbers are the cable's colour. */
+.docs-steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+}
+
+.docs-steps > li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 3rem;
+}
+
+.docs-steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    /* The heading's top margin collapses outside the item, so this is its top. */
+    top: -0.3rem;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 2.25rem;
+    line-height: 1;
+    color: var(--color-cable-deep, #8a6400);
+}
+
+.dark .docs-steps > li::before {
+    color: var(--color-cable);
+}
+
+/* What the agent prints. */
+.docs-out {
+    padding: 0.9rem 1.1rem;
+    border-radius: 0.375rem;
+    background: var(--color-zinc-950);
+    color: var(--color-zinc-400);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.docs-out b {
+    font-weight: 500;
+    color: var(--color-cable);
+}
+
+.dark .docs-out {
+    box-shadow: 0 0 0 1px var(--color-zinc-700);
+}
+
+.docs-tip {
+    padding-left: 1rem;
+    border-left: 3px solid var(--color-cable);
+}
+
+.docs-ref {
+    border-top: 1px solid var(--color-zinc-200);
+}
+
+.dark .docs-ref {
+    border-color: var(--color-zinc-700);
+}
+
+.docs-ref dt {
+    padding-top: 0.75rem;
+    font-weight: 500;
+}
+
+.docs-ref dd {
+    margin: 0.15rem 0 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-zinc-200);
+}
+
+.dark .docs-ref dd {
+    border-color: var(--color-zinc-700);
+}
+
+@media (min-width: 40rem) {
+    .docs-ref {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: 2rem;
+    }
+
+    .docs-ref dt,
+    .docs-ref dd {
+        padding: 0.7rem 0;
+        margin: 0;
+        border-bottom: 1px solid var(--color-zinc-200);
+    }
+
+    .dark .docs-ref dt,
+    .dark .docs-ref dd {
+        border-color: var(--color-zinc-700);
+    }
+}
+
+.docs-faq dt {
+    margin-top: 1.5rem;
+    font-weight: 600;
+}
+
+.docs-faq dd {
+    margin: 0.35rem 0 0;
+}

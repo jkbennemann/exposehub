@@ -1,0 +1,31 @@
+# No DNS provider: every tunnel name gets its own certificate when it is
+# first visited, if the tunnel server confirms the name has a tunnel. Costs a
+# few seconds on the first request to a new name, counts against Let's
+# Encrypt's limit of 50 new certificates per registered domain per week, and
+# every name appears in the public Certificate Transparency logs.
+
+(tls_tunnels) {
+	tls {
+		on_demand
+	}
+}
+
+(tls_dashboard) {
+	# The dashboard is only ever served over HTTPS with a certificate browsers
+	# trust, so browsers may refuse plain HTTP for it from now on. Without
+	# includeSubDomains: names under the dashboard's host are not ours to
+	# promise anything about.
+	header Strict-Transport-Security "max-age=31536000"
+}
+
+(tls_custom) {
+	tls {
+		on_demand
+	}
+}
+
+# Every site refuses requests Docker relayed from inside the edge network;
+# see (refuse_relayed) in the Caddyfile.
+(edge_guard) {
+	import refuse_relayed
+}

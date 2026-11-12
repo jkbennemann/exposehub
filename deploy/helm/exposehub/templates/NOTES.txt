@@ -1,0 +1,51 @@
+exposehub {{ .Chart.AppVersion }} is installed as "{{ .Release.Name }}" in namespace {{ .Release.Namespace }}.
+
+1. DNS. Point these names at your ingress controller's public address:
+
+     {{ include "eh.webHost" . }}
+{{- range (prepend .Values.server.additionalTunnelDomains (include "eh.tunnelDomain" .)) }}
+     *.{{ . }}
+{{- end }}
+
+2. Certificates. Watch them become ready (a few minutes after DNS resolves):
+
+     kubectl -n {{ .Release.Namespace }} get certificate
+
+{{- if eq .Values.ingress.certificate.mode "secret" }}
+   The tunnel certificate is yours to provide: a TLS secret named
+   {{ include "eh.tunnelTlsSecret" . }} covering *.{{ include "eh.tunnelDomain" . }}.
+{{- end }}
+{{- if not (or .Values.web.ingress.tls.clusterIssuer .Values.web.ingress.tls.issuer) }}
+   The dashboard certificate is yours to provide: a TLS secret named
+   {{ include "eh.webTlsSecret" . }} covering {{ include "eh.webHost" . }}.
+{{- end }}
+
+3. Sign up at https://{{ include "eh.webHost" . }}/register
+{{- if .Values.web.adminEmails }}
+   with {{ .Values.web.adminEmails }}. Once the address is verified, that account
+   is a platform owner and can open /admin.
+{{- else }}
+   Set web.adminEmails to make your account a platform owner (/admin).
+{{- end }}
+{{- if eq .Values.web.mail.mailer "log" }}
+
+   Mail is written to the log, not sent. Read the verification link with:
+
+     kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "eh.webName" . }} -c web | grep -i verify
+{{- end }}
+
+4. Install the agent on a developer machine, create a token in the dashboard,
+   and open a tunnel:
+
+     curl -fsSL https://{{ include "eh.agentHost" . }}/install.sh | sh
+     exposehub login
+     exposehub http 8000
+{{- if eq .Values.networkPolicy.type "none" }}
+
+No network policies were created, so every pod in the cluster can reach the
+server and the dashboard. The ones with an address in server.trustedProxies
+({{ .Values.server.trustedProxies }}) can claim any visitor address, and with
+that pass network rules and get around login limits. Trust only the ingress
+controller's own addresses, or use networkPolicy.type kubernetes or cilium;
+see docs/self-hosting/kubernetes.md in the repository.
+{{- end }}

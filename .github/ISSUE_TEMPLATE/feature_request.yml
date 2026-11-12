@@ -1,0 +1,20 @@
+name: Feature request
+description: Something exposehub should do that it does not do yet.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and where exposehub gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: How it could work. Commands, screens or configuration you imagine.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today

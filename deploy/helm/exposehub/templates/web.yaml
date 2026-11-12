@@ -1,0 +1,264 @@
+{{- $host := include "eh.webHost" . }}
+{{- $webSecret := include "eh.webSecret" . }}
+{{- $db := dict "host" (include "eh.postgresName" .) "port" "5432" "database" .Values.postgres.db "username" .Values.postgres.user "sslmode" "" }}
+{{- if not .Values.postgres.enabled }}
+{{- $db = dict "host" (required "externalDatabase.host is required when postgres.enabled is false" .Values.externalDatabase.host) "port" (toString .Values.externalDatabase.port) "database" .Values.externalDatabase.database "username" .Values.externalDatabase.username "sslmode" .Values.externalDatabase.sslmode }}
+{{- end }}
+{{- $env := list
+  (dict "name" "APP_NAME" "value" "exposehub")
+  (dict "name" "APP_URL" "value" (printf "https://%s" $host))
+  (dict "name" "DB_CONNECTION" "value" "pgsql")
+  (dict "name" "DB_HOST" "value" $db.host)
+  (dict "name" "DB_PORT" "value" $db.port)
+  (dict "name" "DB_DATABASE" "value" $db.database)
+  (dict "name" "DB_USERNAME" "value" $db.username)
+  (dict "name" "SESSION_DRIVER" "value" "database")
+  (dict "name" "SESSION_SECURE_COOKIE" "value" "true")
+  (dict "name" "CACHE_STORE" "value" "database")
+  (dict "name" "QUEUE_CONNECTION" "value" "sync")
+  (dict "name" "MAIL_MAILER" "value" .Values.web.mail.mailer)
+  (dict "name" "MAIL_FROM_ADDRESS" "value" (.Values.web.mail.fromAddress | default (printf "noreply@%s" $host)))
+  (dict "name" "MAIL_FROM_NAME" "value" .Values.web.mail.fromName)
+  (dict "name" "EXPOSEHUB_AGENT_SERVER" "value" (printf "https://%s" (include "eh.agentHost" .)))
+  (dict "name" "EXPOSEHUB_TUNNEL_DOMAIN" "value" (include "eh.tunnelDomain" .))
+  (dict "name" "EXPOSEHUB_ALLOWED_EMAIL_DOMAINS" "value" .Values.web.allowedEmailDomains)
+  (dict "name" "EXPOSEHUB_HIDDEN_EMAIL_DOMAINS" "value" .Values.web.hiddenEmailDomains)
+  (dict "name" "EXPOSEHUB_CONTACT_EMAIL" "value" .Values.web.contactEmail)
+  (dict "name" "EXPOSEHUB_ADMIN_EMAILS" "value" .Values.web.adminEmails)
+  (dict "name" "EXPOSEHUB_TRUSTED_PROXIES" "value" .Values.server.trustedProxies)
+  (dict "name" "EXPOSEHUB_LEGAL_PATH" "value" "/legal")
+  (dict "name" "EXPOSEHUB_LOG_RETENTION_DAYS" "value" (toString .Values.web.logRetentionDays))
+  (dict "name" "EXPOSEHUB_MAX_TEAMS_PER_USER" "value" (toString .Values.web.limits.teamsPerUser))
+  (dict "name" "EXPOSEHUB_MAX_SAVED_ADDRESSES_PER_USER" "value" (toString .Values.web.limits.savedAddressesPerUser))
+  (dict "name" "EXPOSEHUB_MAX_NETWORKS_PER_TEAM" "value" (toString .Values.web.limits.networksPerTeam))
+  (dict "name" "EXPOSEHUB_MAX_DOMAINS_PER_TEAM" "value" (toString .Values.web.limits.domainsPerTeam))
+  (dict "name" "EXPOSEHUB_MAX_REGISTRATIONS_PER_IP_PER_HOUR" "value" (toString .Values.web.limits.registrationsPerIpPerHour))
+  (dict "name" "EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_IP_PER_HOUR" "value" (toString .Values.web.limits.passwordResetLinksPerIpPerHour))
+  (dict "name" "EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_ADDRESS_PER_HOUR" "value" (toString .Values.web.limits.passwordResetLinksPerAddressPerHour))
+  (dict "name" "EXPOSEHUB_MAX_PASSWORD_CHECKS_PER_MINUTE" "value" (toString .Values.web.limits.passwordChecksPerMinute))
+  (dict "name" "EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_MINUTE" "value" (toString .Values.web.limits.twoFactorAttemptsPerMinute))
+  (dict "name" "EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_DAY" "value" (toString .Values.web.limits.twoFactorAttemptsPerDay))
+  (dict "name" "EXPOSEHUB_MAX_TWO_FACTOR_FAILURES_IN_A_ROW" "value" (toString .Values.web.limits.twoFactorFailuresInARow))
+-}}
+{{- with $db.sslmode }}
+{{- $env = append $env (dict "name" "DB_SSLMODE" "value" .) }}
+{{- end }}
+{{- with .Values.web.sourceUrl }}
+{{- $env = append $env (dict "name" "EXPOSEHUB_SOURCE_URL" "value" .) }}
+{{- end }}
+{{- if .Values.web.customDomains.enabled }}
+{{- $env = concat $env (list
+  (dict "name" "EXPOSEHUB_DOMAIN_PROVISIONER" "value" "kubernetes")
+  (dict "name" "EXPOSEHUB_K8S_INGRESS_CLASS" "value" (required "ingress.className is required when web.customDomains.enabled is true: the dashboard names it on every Ingress it creates" .Values.ingress.className))
+  (dict "name" "EXPOSEHUB_K8S_CLUSTER_ISSUER" "value" (required "web.customDomains.clusterIssuer (or web.ingress.tls.clusterIssuer) is required when web.customDomains.enabled is true" (.Values.web.customDomains.clusterIssuer | default .Values.web.ingress.tls.clusterIssuer)))
+  (dict "name" "EXPOSEHUB_K8S_TUNNEL_SERVICE" "value" (include "eh.serverName" .))
+  (dict "name" "EXPOSEHUB_K8S_TUNNEL_SERVICE_PORT" "value" "80")
+) }}
+{{- end }}
+{{- /* SMTP settings only when a host is set: an empty variable would replace Laravel's default with nothing. */ -}}
+{{- if .Values.web.mail.host }}
+{{- $env = concat $env (list
+  (dict "name" "MAIL_HOST" "value" .Values.web.mail.host)
+  (dict "name" "MAIL_PORT" "value" (toString .Values.web.mail.port))
+  (dict "name" "MAIL_USERNAME" "value" .Values.web.mail.username)
+) }}
+{{- end }}
+{{- $env = concat $env (list
+  (dict "name" "APP_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" $webSecret "key" "APP_KEY")))
+  (dict "name" "DB_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" $webSecret "key" "DB_PASSWORD")))
+  (dict "name" "EXPOSEHUB_NODE_SECRET" "valueFrom" (dict "secretKeyRef" (dict "name" $webSecret "key" "EXPOSEHUB_NODE_SECRET")))
+  (dict "name" "MAIL_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" $webSecret "key" "MAIL_PASSWORD" "optional" true)))
+) }}
+{{- $env = concat $env .Values.web.extraEnv }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "eh.webSelector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "eh.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/legal: {{ toJson .Values.legal | sha256sum }}
+        {{- with .Values.web.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.web.customDomains.enabled }}
+      serviceAccountName: {{ include "eh.webName" . }}
+      automountServiceAccountToken: true
+      {{- else }}
+      automountServiceAccountToken: false
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        fsGroup: 33
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Migrations run to completion before the new version serves a request.
+      initContainers:
+        - name: migrate
+          image: {{ include "eh.webImage" . | quote }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          args: ["php", "artisan", "migrate", "--force"]
+          env:
+            {{- toYaml $env | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts: &webMounts
+            - { name: storage, mountPath: /app/storage }
+            - { name: bootstrap-cache, mountPath: /app/bootstrap/cache }
+            - { name: caddy-data, mountPath: /data }
+            - { name: caddy-config, mountPath: /config }
+            - { name: tmp, mountPath: /tmp }
+            - { name: legal, mountPath: /legal, readOnly: true }
+      containers:
+        - name: web
+          image: {{ include "eh.webImage" . | quote }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- toYaml $env | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          volumeMounts: *webMounts
+        # Runs the scheduled jobs: deleting request logs past the retention
+        # period (hourly) and expired team invitations (daily).
+        - name: scheduler
+          image: {{ include "eh.webImage" . | quote }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          args: ["php", "artisan", "schedule:work"]
+          env:
+            {{- toYaml $env | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.web.scheduler.resources | nindent 12 }}
+          volumeMounts: *webMounts
+      volumes:
+        - { name: storage, emptyDir: {} }
+        - { name: bootstrap-cache, emptyDir: {} }
+        - { name: caddy-data, emptyDir: {} }
+        - { name: caddy-config, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        - name: legal
+          configMap:
+            name: {{ include "eh.fullname" . }}-legal
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "eh.webSelector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# The operator's legal texts. A file is present only when the operator
+# provided it; the dashboard shows a page and its link only for files that exist.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "eh.fullname" . }}-legal
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+data:
+  {{- with .Values.legal.imprint }}
+  imprint.md: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.legal.privacy }}
+  privacy.md: {{ . | quote }}
+  {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.web.ingress.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.web.ingress.tls.issuer }}
+    cert-manager.io/issuer: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.web.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with (.Values.web.ingress.className | default .Values.ingress.className) }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - secretName: {{ include "eh.webTlsSecret" . }}
+      hosts:
+        - {{ $host | quote }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "eh.webName" . }}
+                port:
+                  number: 80

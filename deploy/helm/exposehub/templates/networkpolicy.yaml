@@ -1,0 +1,95 @@
+{{- $type := .Values.networkPolicy.type }}
+{{- if not (has $type (list "none" "kubernetes" "cilium")) }}
+{{- fail "networkPolicy.type must be none, kubernetes or cilium" }}
+{{- end }}
+{{- if eq $type "kubernetes" }}
+{{- $ingressNs := include "eh.ingressNamespace" . }}
+# Tunnel server: reachable only from the ingress controller on 8080 (plus
+# networkPolicy.extraIngressFrom). It may reach the dashboard and DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "eh.serverName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "eh.serverSelector" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ingressNs }}
+        {{- with .Values.networkPolicy.extraIngressFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "eh.webSelector" . | nindent 14 }}
+      ports:
+        - port: 8080
+          protocol: TCP
+    {{- include "eh.dnsEgress" . | nindent 4 }}
+---
+# Dashboard: reachable from the ingress controller and the tunnel server on
+# 8080. Egress stays open: mail, the breached-password check and the API
+# server (custom domains) cannot be named by a standard NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "eh.webSelector" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ingressNs }}
+        - podSelector:
+            matchLabels:
+              {{- include "eh.serverSelector" . | nindent 14 }}
+        {{- with .Values.networkPolicy.extraIngressFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: 8080
+          protocol: TCP
+{{- if .Values.postgres.enabled }}
+---
+# Postgres: reachable only from the dashboard pod on 5432. It may reach DNS
+# only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "eh.postgresName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "eh.postgresSelector" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "eh.webSelector" . | nindent 14 }}
+      ports:
+        - port: 5432
+          protocol: TCP
+  egress:
+    {{- include "eh.dnsEgress" . | nindent 4 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,64 @@
+{{- if .Values.ingress.enabled }}
+{{- $domains := prepend .Values.server.additionalTunnelDomains (include "eh.tunnelDomain" .) }}
+{{- $agentHost := include "eh.agentHost" . }}
+{{- $hosts := list }}
+{{- $covered := false }}
+{{- range $domains }}
+{{- $hosts = append $hosts (printf "*.%s" .) }}
+{{- if eq $agentHost (printf "%s.%s" (first (splitList "." $agentHost)) .) }}
+{{- $covered = true }}
+{{- end }}
+{{- end }}
+{{- if not $covered }}
+{{- $hosts = append $hosts $agentHost }}
+{{- end }}
+{{- $mode := .Values.ingress.certificate.mode }}
+{{- if not (has $mode (list "issuer" "clusterIssuer" "secret")) }}
+{{- fail "ingress.certificate.mode must be issuer, clusterIssuer or secret" }}
+{{- end }}
+# One wildcard rule per tunnel domain: every tunnel hostname and the agent
+# host (connect.<domain>) reach the server, which routes by Host itself.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "eh.fullname" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq $mode "issuer" }}
+    cert-manager.io/issuer: {{ include "eh.issuerName" . | quote }}
+    {{- else if eq $mode "clusterIssuer" }}
+    cert-manager.io/cluster-issuer: {{ required "ingress.certificate.clusterIssuer is required in clusterIssuer mode" .Values.ingress.certificate.clusterIssuer | quote }}
+    {{- end }}
+    {{- if .Values.ingress.nginxTuning.enabled }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.nginxTuning.proxyBodySize | quote }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.nginxTuning.proxyReadTimeout | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.nginxTuning.proxySendTimeout | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - secretName: {{ include "eh.tunnelTlsSecret" . }}
+      hosts:
+        {{- range $hosts }}
+        - {{ . | quote }}
+        {{- end }}
+  rules:
+    {{- range $hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "eh.serverName" $ }}
+                port:
+                  number: 80
+    {{- end }}
+{{- end }}

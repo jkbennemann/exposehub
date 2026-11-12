@@ -1,0 +1,23 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.certificate.mode "issuer") }}
+{{- $issuer := .Values.ingress.certificate.issuer }}
+{{- if not $issuer.solvers }}
+{{- fail "ingress.certificate.issuer.solvers is required in issuer mode: a cert-manager ACME solver that can do DNS-01 for the tunnel domain (see values.yaml)" }}
+{{- end }}
+# A namespaced Issuer with its own ACME account, so this release owns its
+# certificate path and cannot disturb other certificates in the cluster.
+# DNS-01, because a wildcard certificate cannot be issued any other way.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "eh.issuerName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  acme:
+    email: {{ required "ingress.certificate.issuer.email is required in issuer mode: the ACME account's contact address" $issuer.email | quote }}
+    server: {{ $issuer.server | quote }}
+    privateKeySecretRef:
+      name: {{ include "eh.issuerName" . }}-account-key
+    solvers:
+      {{- toYaml $issuer.solvers | nindent 6 }}
+{{- end }}

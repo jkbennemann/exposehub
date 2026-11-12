@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in the tunnel server, the agent or the dashboard does not work as described.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem does not belong here. Report it privately as SECURITY.md describes.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Error messages verbatim.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest set of steps or commands that shows it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`exposehub version` for the agent; the image tag for the server and the dashboard."
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How the server is installed
+      options:
+        - Docker Compose (deploy/compose)
+        - Kubernetes (Helm chart)
+        - Built from source
+        - Someone else's install
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant log lines. Remove tokens, secrets and addresses you do not want public.
+      render: text

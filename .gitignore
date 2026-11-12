@@ -1,0 +1,10 @@
+.DS_Store
+.env
+/tunnel/bin/
+/tunnel/dist/
+/dist/
+
+# A self-hosted install's own configuration, legal texts and backups.
+/deploy/compose/.env
+/deploy/compose/legal/*.md
+/deploy/compose/backups/

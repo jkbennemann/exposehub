@@ -1,0 +1,4 @@
+# deSEC token.
+dns desec {
+	token {env.DESEC_TOKEN}
+}

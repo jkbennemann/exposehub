@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# The agent binaries attached to each GitHub release. The release workflow
+# runs this on a tag vX.Y.Z; locally: goreleaser release --snapshot --clean
+#
+# The names match what the tunnel server hands out at /agent/
+# (exposehub-<os>-<arch>[.exe]), so a binary from the release page and one
+# from an install's own server are the same file.
+version: 2
+
+project_name: exposehub
+
+builds:
+  - id: agent
+    dir: tunnel
+    main: ./cmd/exposehub
+    binary: exposehub
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # No default server: generic builds never guess where to send a token.
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: agent
+    ids: [agent]
+    formats: [binary]
+    name_template: 'exposehub-{{ .Os }}-{{ .Arch }}'
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# The release notes come from CHANGELOG.md (--release-notes).
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: jkbennemann
+    name: exposehub
+  prerelease: auto
+  mode: replace

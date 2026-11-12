@@ -1,0 +1,62 @@
+# Changelog
+
+All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). The tunnel server, the agent, the dashboard, the images and the Helm chart share one version.
+
+## [Unreleased]
+
+## [0.1.0] - 2026-11-12
+
+First public release.
+
+### Licence
+
+- Source-available under the Functional Source License, [FSL-1.1-ALv2](LICENSE). Each release converts to Apache-2.0 two years after it is published.
+- Contributions are accepted under a [Contributor License Agreement](CLA.md).
+
+### Tunnel server and agent
+
+- HTTP and WebSocket tunnels from a local service to a public subdomain, or to a domain a team has connected; the agent reconnects by itself and keeps its address.
+- Up to ten tunnels over one connection (`exposehub http shop=8000 api=3000`), and an `exposehub.yml` per project for tunnels started often with `exposehub start`.
+- Password protection per tunnel (`--auth`), checked by the server before a request reaches the local machine.
+- Access rules by IP address and network (`--allow`, plus networks managed in the dashboard), checked on every request.
+- A local request inspector at `http://127.0.0.1:4040` with full requests and responses, replay and copy as `curl`.
+- The server hands out the agent: `curl -fsSL https://connect.<your domain>/install.sh | sh`, with SHA-256 checks; `exposehub update` installs the version the server offers.
+- `exposehub login`, `logout` and `server`; the installer remembers the server it came from.
+- Styled error pages for browsers when a tunnel cannot serve a request.
+- Vite, webpack and Next.js dev servers work without configuration, hot reload included. When Vite or webpack refuses the public hostname, the agent sends it its own name from then on; when Next.js refuses its hot-reload socket or error overlay to a page opened through the tunnel, the agent passes those requests on as coming from the dev server's own address. Pages of other sites stay refused. The agent says what it did, and the first visitor already gets a working page. `--host-header preserve` turns both off; the agent then prints the `allowedDevOrigins` line Next.js needs.
+- The agent says at start when nothing listens on the local port yet, and keeps the tunnel open.
+- `EXPOSEHUB_LOG_FORMAT=json` makes the tunnel server log one JSON object per line (`server.logFormat` in the Helm chart).
+- Configuration entirely through environment variables; nothing about an install is compiled in.
+
+### Dashboard
+
+- Accounts with passkeys, two-factor authentication and email verification; registration can be limited to email domains, some of which can stay unnamed.
+- Teams, agent tokens, teams' own domains verified by a DNS TXT record, saved addresses and network access rules.
+- Request logs per tunnel owner, kept for a configurable number of days, with secrets redacted; headers and bodies only for tunnels started with `--log-bodies`.
+- A Tunnels page that lists the agents connected right now and disconnects one that was left running; its token keeps working. Members see their own, owners and admins the team's, and a person whose tunnel a colleague closes gets a mail.
+- An admin area for operators: overview of the dashboard, the tunnel server and connected agents; people, teams, live tunnels, settings and an audit log.
+- A mail to the account holder for every change to their account, and complete account deletion.
+- Public documentation at `/docs`, and imprint and privacy pages from the operator's own Markdown files.
+
+### Self-hosting
+
+- Container images for the tunnel server, the dashboard and Caddy, for amd64 and arm64.
+- A Docker Compose install with `install.sh`, including certificates for the tunnel domain and for teams' own domains.
+- A Helm chart for Kubernetes.
+
+### Security
+
+- Resetting or changing a password ends the account's other sessions.
+- Passkeys and two-factor authentication can only be set up once the email address is verified; a password reset removes those of an account that never verified.
+- Limits per person and team: 10 owned teams and 25 saved addresses per person, 25 networks and 25 own domains per team, changeable with `EXPOSEHUB_MAX_*`.
+- Team invitations are rate-limited: 10 per inviter per hour, 2 per team and address per day.
+- Sign-ups (each sends a verification mail) and password-reset mails are rate-limited: 5 sign-ups per IP address and hour, 10 reset mails per IP address and 3 per email address and hour, changeable with `EXPOSEHUB_MAX_REGISTRATIONS_PER_IP_PER_HOUR` and `EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_*`.
+- Wrong passwords inside a signed-in session (5 a minute per account) and two-factor codes (5 a minute, 20 a day) are limited; after 5 wrong codes in a row the sign-in starts over with the password and the account holder gets a mail. Changeable with `EXPOSEHUB_MAX_PASSWORD_CHECKS_PER_MINUTE` and `EXPOSEHUB_MAX_TWO_FACTOR_*`.
+- When the tunnel server cannot refresh the dashboard's token list for longer than `EXPOSEHUB_CONTROL_PLANE_MAX_STALE` (5 minutes), it closes the tunnels opened with dashboard tokens until the dashboard is back, so a revoked token cannot keep working; static tokens keep working, and the admin overview says so.
+- On-demand certificates for tunnel names are budgeted per team: 10 new names a week by default (`EXPOSEHUB_TLS_ASK_NAME_LIMIT`, `EXPOSEHUB_TLS_ASK_NAME_WINDOW`).
+- The agent uses an `exposehub.yml` found in a parent directory only if it belongs to you (or root) and others cannot change it; `--file` still names any file.
+- The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
+- The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
+
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.0

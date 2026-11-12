@@ -1,0 +1,11 @@
+# netcup customer number, API key and API password (CCP > Master Data > API).
+# netcup's name servers take a long time to publish a change, hence the
+# long waits.
+dns netcup {
+	customer_number {env.NETCUP_CUSTOMER_NUMBER}
+	api_key {env.NETCUP_API_KEY}
+	api_password {env.NETCUP_API_PASSWORD}
+}
+propagation_delay 600s
+propagation_timeout 900s
+resolvers 1.1.1.1

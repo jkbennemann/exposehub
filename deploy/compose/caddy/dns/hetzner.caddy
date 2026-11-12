@@ -1,0 +1,5 @@
+# Hetzner Cloud API token (Hetzner Console > Security > API tokens, read and
+# write) of the project the zone is in. Zones still in the old DNS Console
+# have to be moved to the Hetzner Console first.
+dns hetzner {env.HETZNER_API_TOKEN}
+propagation_delay 30s

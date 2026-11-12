@@ -1,0 +1,161 @@
+{{- if eq .Values.networkPolicy.type "cilium" }}
+{{- $ingressNs := include "eh.ingressNamespace" . }}
+# Tunnel server: reachable only from the ingress controller (and kubelet
+# probes) on 8080. It may talk to the dashboard, to read the token and domain
+# list, and to kube-dns. Visitor and agent traffic both arrive through the
+# ingress, so a compromised tunnel has no path into other namespaces, nor out
+# to the internet.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "eh.serverName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "eh.serverSelector" . | nindent 6 }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ $ingressNs }}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            {{- include "eh.webSelector" . | nindent 12 }}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    {{- include "eh.ciliumDnsEgress" . | nindent 4 }}
+---
+# Dashboard: reachable from the ingress controller, the tunnel server and
+# kubelet probes on 8080. It may talk to its database, to kube-dns (which
+# is also how it checks the DNS records of a team's own domain) and to the
+# breached-password service{{ if .Values.web.mail.host }}, and to
+# the mail server{{ end }}.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "eh.webSelector" . | nindent 6 }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ $ingressNs }}
+        - matchLabels:
+            {{- include "eh.serverSelector" . | nindent 12 }}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    {{- if .Values.postgres.enabled }}
+    - toEndpoints:
+        - matchLabels:
+            {{- include "eh.postgresSelector" . | nindent 12 }}
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    {{- else }}
+    # External database: Cilium cannot know its address, so its port is open
+    # to any destination.
+    - toEntities:
+        - world
+        - cluster
+      toPorts:
+        - ports:
+            - port: {{ .Values.externalDatabase.port | quote }}
+              protocol: TCP
+    {{- end }}
+    # DNS, with the lookups visible to Cilium: the toFQDNs rule below only
+    # matches addresses Cilium has seen this pod resolve.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+    {{- with .Values.web.passwordCheckHost }}
+    # The breached-password check on registration and password change.
+    - toFQDNs:
+        - matchName: {{ . | quote }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    {{- if .Values.web.customDomains.enabled }}
+    # The cluster API, to create and delete the Ingress of a connected domain.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    {{- end }}
+    {{- if .Values.web.mail.host }}
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: {{ .Values.web.mail.port | quote }}
+              protocol: TCP
+    {{- end }}
+{{- if .Values.postgres.enabled }}
+---
+# Postgres: reachable only from the dashboard pod (its migration step
+# included) on 5432.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "eh.postgresName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "eh.postgresSelector" . | nindent 6 }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            {{- include "eh.webSelector" . | nindent 12 }}
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+  egress:
+    {{- include "eh.ciliumDnsEgress" . | nindent 4 }}
+{{- end }}
+{{- end }}
