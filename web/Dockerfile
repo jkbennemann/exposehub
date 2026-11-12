@@ -18,7 +18,7 @@ COPY . .
 RUN composer dump-autoload --optimize --no-dev --no-scripts
 
 # Front-end assets. The stylesheet imports Flux from vendor/, so it needs the PHP dependencies.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS assets
+FROM --platform=$BUILDPLATFORM node:25-alpine AS assets
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml .npmrc ./
