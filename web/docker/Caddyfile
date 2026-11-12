@@ -1,0 +1,13 @@
+{
+	# TLS belongs to the reverse proxy in front of this container.
+	auto_https off
+	admin off
+	persist_config off
+	frankenphp
+}
+
+:8080 {
+	root * /app/public
+	encode zstd gzip
+	php_server
+}

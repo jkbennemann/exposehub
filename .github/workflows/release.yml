@@ -1,0 +1,316 @@
+name: release
+
+# Publishes one version of everything from a tag vX.Y.Z:
+#   - images ghcr.io/jkbennemann/exposehub-{server,web,caddy}, linux/amd64 and
+#     linux/arm64, tagged X.Y.Z, X.Y and latest
+#   - the agent binaries and their checksums on the GitHub release (GoReleaser)
+#   - the Helm chart at oci://ghcr.io/jkbennemann/charts/exposehub
+# The tag must equal the root VERSION file, and CHANGELOG.md must have a
+# section for the version; its text becomes the release notes.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/jkbennemann/exposehub
+  CHART_REPOSITORY: oci://ghcr.io/jkbennemann/charts
+
+jobs:
+  prepare:
+    name: Check version and collect release notes
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare the tag with VERSION
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match VERSION ($version). Tag v$version, or change VERSION first."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # A checkout of the tag is what self-hosters run, so the image tags the
+      # Compose file defaults to and the chart's version must name this release.
+      - name: Check that Compose and the chart pin this version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          status=0
+          stale="$(grep -o 'EXPOSEHUB_VERSION:-[^}]*' deploy/compose/docker-compose.yml | sort -u | grep -v -x "EXPOSEHUB_VERSION:-$VERSION" || true)"
+          if [ -n "$stale" ]; then
+            echo "::error file=deploy/compose/docker-compose.yml::Image tags default to ${stale#EXPOSEHUB_VERSION:-}, not $VERSION."
+            status=1
+          fi
+          for key in version appVersion; do
+            if ! grep -q -x "$key: \"\{0,1\}$VERSION\"\{0,1\}" deploy/helm/exposehub/Chart.yaml; then
+              echo "::error file=deploy/helm/exposehub/Chart.yaml::$key is not $VERSION."
+              status=1
+            fi
+          done
+          exit "$status"
+
+      - name: Extract the CHANGELOG section
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION."
+            exit 1
+          fi
+          cat release-notes.md
+
+      - name: Keep the release notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 7
+
+  test:
+    name: Tests
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # One job per image and architecture, each on a runner of that architecture,
+  # so nothing is emulated. Each pushes its image by digest only; the merge job
+  # below puts the two digests of an image under one multi-arch tag.
+  build:
+    name: Build ${{ matrix.image }} (${{ matrix.arch }})
+    needs: [prepare, test]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [server, web, caddy]
+        arch: [amd64, arm64]
+    env:
+      CONTEXT: ${{ matrix.image == 'server' && 'tunnel' || matrix.image == 'web' && 'web' || 'deploy/caddy' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+
+      # Public images carry no default server (DEFAULT_SERVER is empty): an
+      # agent never sends its token to a server it guessed.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ env.CONTEXT }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            DEFAULT_SERVER=
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
+
+      - name: Record the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish ${{ matrix.image }}
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [server, web, caddy]
+
+    steps:
+      - name: Download the digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # X.Y.Z, X.Y and latest. A pre-release tag (v0.2.0-rc.1) gets only its
+      # own tag: metadata-action leaves X.Y and latest out for those.
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+          flavor: |
+            latest=auto
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Create the multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+        run: |
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "$IMAGE@sha256:%s " *)
+
+      - name: Read the manifest digest
+        id: manifest
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          digest="$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          push-to-registry: true
+
+  agents:
+    name: Agent binaries and GitHub release
+    needs: [prepare, merge]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tunnel/go.mod
+          cache-dependency-path: tunnel/go.sum
+
+      - name: Download the release notes
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}
+
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest the agent binaries
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+
+  chart:
+    name: Helm chart
+    needs: [prepare, merge]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Helm
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+
+      - name: Package and push
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          helm lint --strict deploy/helm/exposehub -f deploy/helm/exposehub/ci/minimal-values.yaml
+          helm package deploy/helm/exposehub --version "$VERSION" --app-version "$VERSION" --destination "$RUNNER_TEMP/chart"
+          printf '%s' "$TOKEN" | helm registry login "$REGISTRY" --username "$ACTOR" --password-stdin
+          helm push "$RUNNER_TEMP/chart/exposehub-$VERSION.tgz" "$CHART_REPOSITORY"

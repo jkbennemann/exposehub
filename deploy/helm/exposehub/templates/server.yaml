@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eh.serverName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  # Fixed at one and Recreate: see server.resources in values.yaml.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "eh.serverSelector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "eh.labels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.server.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: server
+          image: {{ include "eh.serverImage" . | quote }}
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: EXPOSEHUB_LISTEN
+              value: ":8080"
+            - name: EXPOSEHUB_AGENT_HOST
+              value: {{ include "eh.agentHost" . | quote }}
+            - name: EXPOSEHUB_TUNNEL_DOMAINS
+              value: {{ include "eh.tunnelDomains" . | quote }}
+            # The ingress terminates TLS; the server itself speaks plain
+            # HTTP and only needs to know how visitors reach it.
+            - name: EXPOSEHUB_PUBLIC_SCHEME
+              value: {{ .Values.server.publicScheme | quote }}
+            - name: EXPOSEHUB_PUBLIC_PORT
+              value: {{ .Values.server.publicPort | quote }}
+            - name: EXPOSEHUB_TRUSTED_PROXIES
+              value: {{ required "server.trustedProxies is required: the CIDR of the ingress controller's pods, usually the cluster's pod CIDR" .Values.server.trustedProxies | quote }}
+            # Tokens and connected domains are mirrored from the dashboard and
+            # kept in /data, so agents can reconnect while the dashboard is
+            # down. /data is an emptyDir: it survives a container restart but
+            # not a new pod, so a pod started during a dashboard outage knows
+            # no tokens until the dashboard is back.
+            - name: EXPOSEHUB_CONTROL_PLANE_URL
+              value: {{ printf "http://%s" (include "eh.webName" .) | quote }}
+            - name: EXPOSEHUB_DATA_DIR
+              value: /data
+            # Past this without a refresh, dashboard tokens stop working.
+            - name: EXPOSEHUB_CONTROL_PLANE_MAX_STALE
+              value: {{ .Values.server.controlPlaneMaxStale | toString | quote }}
+            - name: EXPOSEHUB_GRACE_PERIOD
+              value: {{ .Values.server.gracePeriod | quote }}
+            - name: EXPOSEHUB_LOG_LEVEL
+              value: {{ .Values.server.logLevel | quote }}
+            - name: EXPOSEHUB_LOG_FORMAT
+              value: {{ .Values.server.logFormat | quote }}
+            # Summaries of tunnel requests for the dashboard's request log.
+            - name: EXPOSEHUB_REQUEST_LOGS
+              value: {{ ternary "on" "off" .Values.server.requestLogs | quote }}
+            {{- include "eh.secretEnv" (dict "name" "EXPOSEHUB_NODE_SECRET" "secret" (include "eh.serverSecret" .)) | nindent 12 }}
+            {{- include "eh.secretEnv" (dict "name" "EXPOSEHUB_STATIC_TOKENS" "secret" (include "eh.serverSecret" .) "optional" true) | nindent 12 }}
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # /healthz is only served on the agent host, so the probes name it.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ include "eh.agentHost" . | quote }}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ include "eh.agentHost" . | quote }}
+            periodSeconds: 20
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eh.serverName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "eh.serverSelector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

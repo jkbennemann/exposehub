@@ -1,0 +1,18 @@
+# The dashboard and teams' own domains. Imported by the Caddyfile when
+# EXPOSEHUB_STACK=full.
+
+{$EXPOSEHUB_DASHBOARD_HOST} {
+	import edge_guard
+	import tls_dashboard
+	encode zstd gzip
+	reverse_proxy web:8080
+}
+
+# Any other name: a domain a team has connected in the dashboard. The
+# certificate is requested on the first visit, and only once the tunnel
+# server's ask endpoint confirms the domain is verified.
+https:// {
+	import edge_guard
+	import tls_custom
+	import to_tunnel_server
+}

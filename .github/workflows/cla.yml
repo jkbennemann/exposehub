@@ -1,0 +1,41 @@
+name: cla
+
+# Asks every contributor to sign CLA.md once, by commenting on their pull
+# request. Signatures are stored in this repository on the branch
+# `cla-signatures` (signatures/version1/cla.json), written with GITHUB_TOKEN.
+#
+# Runs on pull_request_target so it can comment on pull requests from forks.
+# It never checks out or runs code from the pull request.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  statuses: write
+
+jobs:
+  cla:
+    name: Contributor licence agreement
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request &&
+        (github.event.comment.body == 'recheck' ||
+         github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'))
+
+    steps:
+      - name: CLA Assistant Lite
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-document: https://github.com/jkbennemann/exposehub/blob/main/CLA.md
+          path-to-signatures: signatures/version1/cla.json
+          branch: cla-signatures
+          allowlist: jkbennemann,dependabot[bot],github-actions[bot],*[bot]

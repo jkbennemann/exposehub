@@ -1,0 +1,54 @@
+# Used by CI: every optional path at once. Dummy values only.
+fullnameOverride: eh
+server:
+  tunnelDomain: tunnels.example.net
+  additionalTunnelDomains: [tunnels.example.org]
+  agentHost: agents.example.com
+  trustedProxies: 10.42.0.0/16
+  controlPlaneMaxStale: "0"
+  extraEnv:
+    - name: EXPOSEHUB_CUSTOM_DOMAIN_HEADERS
+      value: X-Robots-Tag=noindex
+web:
+  host: dash.example.com
+  sourceUrl: https://git.example.com/fork/exposehub
+  limits:
+    teamsPerUser: 3
+    savedAddressesPerUser: 10
+    networksPerTeam: 0
+    domainsPerTeam: 5
+    registrationsPerIpPerHour: 50
+    passwordResetLinksPerIpPerHour: 20
+    passwordResetLinksPerAddressPerHour: 2
+    passwordChecksPerMinute: 3
+    twoFactorAttemptsPerMinute: 4
+    twoFactorAttemptsPerDay: 10
+    twoFactorFailuresInARow: 3
+  ingress:
+    className: nginx
+    tls:
+      issuer: my-http01-issuer
+  customDomains:
+    enabled: true
+    clusterIssuer: letsencrypt-http01
+  mail:
+    mailer: smtp
+    host: smtp.example.com
+    username: noreply@example.com
+legal:
+  imprint: "# Imprint"
+postgres:
+  enabled: false
+externalDatabase:
+  host: db.example.com
+  sslmode: require
+ingress:
+  className: nginx
+  certificate:
+    mode: clusterIssuer
+    clusterIssuer: letsencrypt-dns01
+networkPolicy:
+  type: cilium
+  ingressNamespace: ingress-nginx
+secrets:
+  existingSecret: exposehub-secrets

@@ -1,0 +1,59 @@
+# The edge proxy of a Docker Compose install. Everything specific to an
+# install comes from the environment (.env, written by install.sh):
+#
+#   EXPOSEHUB_TLS_MODE        dns, on-demand or internal: picks tls/<mode>.caddy
+#   EXPOSEHUB_STACK           full or tunnels: picks stack/<stack>.caddy
+#   EXPOSEHUB_DNS_PROVIDER    with the dns mode: picks dns/<provider>.caddy
+#   EXPOSEHUB_TUNNEL_DOMAIN   tunnels get <name>.<this domain>
+#   EXPOSEHUB_DASHBOARD_HOST  the dashboard (full stack only)
+#
+# Edit the files next to this one rather than this one, so an upgrade does
+# not overwrite your changes; better still, tell us what you needed.
+{
+	import /etc/caddy/tls/{$EXPOSEHUB_TLS_MODE}.global.caddy
+
+	# Certificates obtained on demand (teams' own domains, and every tunnel
+	# name in the on-demand mode) only for names the tunnel server vouches
+	# for. Without this anyone could make Caddy request certificates for
+	# arbitrary names and use up the install's Let's Encrypt limits.
+	on_demand_tls {
+		ask http://server:9090/tls/ask
+	}
+}
+
+# Tunnels hold connections open for as long as an agent runs or a visitor
+# streams, so nothing here buffers or times out. Caddy sets X-Forwarded-For
+# to the address it saw, whatever the client sent; the tunnel server and the
+# dashboard believe those headers only from this container's address.
+(to_tunnel_server) {
+	reverse_proxy server:8080 {
+		flush_interval -1
+		stream_close_delay 1m
+	}
+}
+
+# A request whose sender is inside the edge network did not come straight
+# from a visitor: Docker's userland proxy (docker-proxy) relayed it and put
+# the network's gateway in place of the visitor's address, as it does for
+# IPv6 visitors or with Docker's iptables rules turned off. That address is
+# private and the same for everyone, so passing it on would let a network
+# rule that names a private range admit any visitor, and would put everyone
+# under one login limit. Such requests are refused. The tls/<mode>.caddy
+# files decide where this applies through (edge_guard): not in the internal
+# mode, where Docker on a laptop relays every connection this way.
+(refuse_relayed) {
+	@relayed remote_ip {$EXPOSEHUB_SUBNET:172.30.53.0/24}
+	respond @relayed "This server cannot see the address you connect from, so it does not serve the request. Try again over IPv4." 403
+}
+
+import /etc/caddy/tls/{$EXPOSEHUB_TLS_MODE}.caddy
+
+# Every tunnel and the agent host (connect.<tunnel domain>). The tunnel
+# server routes by Host itself.
+*.{$EXPOSEHUB_TUNNEL_DOMAIN} {
+	import edge_guard
+	import tls_tunnels
+	import to_tunnel_server
+}
+
+import /etc/caddy/stack/{$EXPOSEHUB_STACK}.caddy

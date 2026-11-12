@@ -1,0 +1,23 @@
+# Caddy's local certificate authority signs everything. Its root
+# certificate is at /data/caddy/pki/authorities/local/root.crt in the caddy
+# container; see docs/self-hosting/compose.md.
+
+(tls_tunnels) {
+	tls internal
+}
+
+(tls_dashboard) {
+	tls internal
+}
+
+(tls_custom) {
+	tls internal {
+		on_demand
+	}
+}
+
+# Docker on a laptop relays every connection from the edge network's
+# gateway, so nothing is refused here and every visitor shares that address.
+# No HSTS either: browsers do not trust this authority.
+(edge_guard) {
+}

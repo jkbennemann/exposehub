@@ -1,0 +1,90 @@
+#!/bin/sh
+# Installs or updates the exposehub agent from {{.BaseURL}}
+#
+#   curl -fsSL {{.BaseURL}}/install.sh | sh
+#
+# It installs to ~/.local/bin, or to EXPOSEHUB_INSTALL_DIR if set, and needs
+# no administrator rights. Running it again updates the agent; so does
+# "exposehub update". The checksums below come from the same server as the
+# download, so they catch a damaged download, not a compromised server.
+set -eu
+
+server='{{.BaseURL}}'
+version='{{.Version}}'
+dir="${EXPOSEHUB_INSTALL_DIR:-$HOME/.local/bin}"
+
+fail() {
+    echo "exposehub install: $*" >&2
+    exit 1
+}
+
+case "$(uname -s)" in
+    Darwin) os=darwin ;;
+    Linux) os=linux ;;
+    *) fail "$(uname -s) is not supported by this script. On Windows, download $server/agent/exposehub-windows-amd64.exe" ;;
+esac
+case "$(uname -m)" in
+    x86_64 | amd64) arch=amd64 ;;
+    arm64 | aarch64) arch=arm64 ;;
+    *) fail "the $(uname -m) processor is not supported" ;;
+esac
+platform="$os-$arch"
+
+case "$platform" in
+{{- range .Files}}
+    {{.Platform}}) file='{{.Name}}' sum='{{.SHA256}}' ;;
+{{- end}}
+    *) fail "this server offers no agent for $platform" ;;
+esac
+
+if command -v curl >/dev/null 2>&1; then
+    fetch() { curl -fsSL --proto '=https,http' "$1" -o "$2"; }
+elif command -v wget >/dev/null 2>&1; then
+    fetch() { wget -q "$1" -O "$2"; }
+else
+    fail "curl or wget is needed to download the agent"
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+    checksum() { sha256sum "$1" | cut -d ' ' -f 1; }
+elif command -v shasum >/dev/null 2>&1; then
+    checksum() { shasum -a 256 "$1" | cut -d ' ' -f 1; }
+else
+    fail "sha256sum or shasum is needed to check the download"
+fi
+
+mkdir -p "$dir" || fail "cannot create $dir; set EXPOSEHUB_INSTALL_DIR to a directory you own"
+# Downloaded next to its destination, so the final step is a rename and a
+# running agent is never left with half a file.
+tmp="$(mktemp "$dir/.exposehub.XXXXXX")" || fail "cannot write to $dir; set EXPOSEHUB_INSTALL_DIR to a directory you own"
+trap 'rm -f "$tmp"' EXIT
+
+echo "Downloading the exposehub agent $version for $platform"
+fetch "$server/agent/$file" "$tmp" || fail "the download from $server failed"
+[ "$(checksum "$tmp")" = "$sum" ] || fail "the download is damaged (checksum mismatch); run the installer again"
+chmod 755 "$tmp"
+mv -f "$tmp" "$dir/exposehub"
+trap - EXIT
+
+echo "Installed $("$dir/exposehub" version) to $dir/exposehub"
+case ":$PATH:" in
+    *":$dir:"*) ;;
+    *)
+        echo
+        echo "$dir is not on your PATH yet. Add this line to your shell profile, then open a new terminal:"
+        echo "  export PATH=\"$dir:\$PATH\""
+        ;;
+esac
+# The agent remembers which server it came from, so no command needs --server.
+# A server saved earlier is kept: it may be another install on purpose.
+saved="$("$dir/exposehub" server --saved 2>/dev/null || true)"
+if [ -z "$saved" ]; then
+    "$dir/exposehub" server "$server" >/dev/null
+elif [ "$saved" != "$server" ]; then
+    echo
+    echo "This agent is set up for $saved. To use $server instead, run:"
+    echo "  exposehub server $server"
+fi
+
+echo
+echo "Next, log in with a token from the dashboard:"
+echo "  exposehub login"

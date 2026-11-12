@@ -1,0 +1,25 @@
+# Used by CI to lint and render the chart. Dummy values only.
+server:
+  tunnelDomain: tunnels.example.net
+  trustedProxies: 10.244.0.0/16
+web:
+  host: dash.example.com
+  ingress:
+    tls:
+      clusterIssuer: letsencrypt
+ingress:
+  certificate:
+    issuer:
+      email: ops@example.com
+      solvers:
+        - dns01:
+            cloudflare:
+              apiTokenSecretRef:
+                name: cloudflare-api-token
+                key: api-token
+networkPolicy:
+  ingressNamespace: ingress-nginx
+secrets:
+  nodeSecret: ci-0123456789abcdef0123456789abcdef
+  appKey: "base64:Y2ktMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmM="
+  dbPassword: ci-0123456789abcdef

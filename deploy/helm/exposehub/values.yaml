@@ -1,0 +1,329 @@
+# exposehub: the tunnel server, the dashboard and a Postgres for it.
+#
+# Required: server.tunnelDomain, server.trustedProxies, web.host and the
+# secrets (or secrets.existingSecret). Everything else has a working default.
+#
+# The tunnel domain and the dashboard host should be on different registrable
+# domains, for example tunnels under example.net and the dashboard at
+# dash.example.com. Tunnels serve whatever a developer's machine returns; on a
+# shared parent domain those pages would count as the same site as the
+# dashboard and could set cookies for it.
+
+nameOverride: ""
+# Prefix of every resource name. Defaults to the release name, or
+# "<release>-exposehub" when the release name does not contain "exposehub".
+fullnameOverride: ""
+
+# Only needed for images from a private registry.
+imagePullSecrets: []
+
+# --- Tunnel server -----------------------------------------------------------
+server:
+  image:
+    repository: ghcr.io/jkbennemann/exposehub-server
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  # Tunnels get subdomains of this domain: <name>.<tunnelDomain>. Required.
+  tunnelDomain: ""
+  # More domains tunnels can use. The first one above is the default.
+  additionalTunnelDomains: []
+  # The hostname agents connect to. Defaults to connect.<tunnelDomain>, which
+  # the wildcard record and the wildcard certificate already cover.
+  agentHost: ""
+
+  # How visitors reach the server, used in the tunnel URLs it prints. The
+  # ingress terminates TLS; the server itself speaks plain HTTP.
+  publicScheme: https
+  publicPort: 443
+
+  # Addresses or CIDRs of the ingress controller's pods, comma separated.
+  # X-Forwarded-For and X-Forwarded-Proto are believed only from these, which
+  # is how the server and the dashboard learn a visitor's address for access
+  # rules, request logs, login limits and the local service behind a tunnel.
+  # Any pod inside this range that can reach the server or the dashboard
+  # directly can claim to be any visitor. The cluster's pod CIDR (for
+  # example 10.42.0.0/16 on k3s, 10.244.0.0/16 on kubeadm and kind) is only
+  # safe together with networkPolicy.type kubernetes or cilium, which let
+  # nothing but the ingress controller reach them. With networkPolicy.type
+  # none, list only the ingress controller's own addresses. Required.
+  trustedProxies: ""
+
+  # How long a subdomain stays reserved for its owner after the agent drops.
+  gracePeriod: 1m
+  # How long the server keeps using the dashboard's token list when it cannot
+  # refresh it. After that it refuses dashboard tokens and closes their
+  # tunnels until the dashboard answers again, so a revoked token cannot keep
+  # working; agents reconnect by themselves. Static tokens are not affected.
+  # "0" keeps the last list forever.
+  controlPlaneMaxStale: 5m
+  # debug, info, warn or error.
+  logLevel: info
+  # text writes key=value lines, json one JSON object per line.
+  logFormat: text
+  # Send a summary of every tunnel request to the dashboard's request log
+  # (owner-only, kept web.logRetentionDays days). false keeps nothing.
+  requestLogs: true
+
+  # Further environment variables, for example
+  # EXPOSEHUB_CUSTOM_DOMAIN_HEADERS. See the README for the full list.
+  extraEnv: []
+
+  # One pod, always. The tunnel registry lives in memory, so a second replica
+  # would send visitors to a pod that does not hold their tunnel. The
+  # Deployment uses Recreate for the same reason; agents reconnect by
+  # themselves within a second or two of a restart.
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { memory: 256Mi }
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# --- Dashboard ---------------------------------------------------------------
+web:
+  image:
+    repository: ghcr.io/jkbennemann/exposehub-web
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  # The dashboard's public hostname. Not under the tunnel domain. Required.
+  host: ""
+
+  ingress:
+    # Defaults to ingress.className.
+    className: ""
+    annotations: {}
+    tls:
+      # Defaults to <fullname>-web-tls.
+      secretName: ""
+      # cert-manager issues the certificate through one of these. HTTP-01 is
+      # enough for a single host. Leave both empty to provide the secret
+      # yourself.
+      clusterIssuer: ""
+      issuer: ""
+
+  # Who may register: comma-separated email domains. Empty lets anyone in.
+  allowedEmailDomains: ""
+  # Allowed domains that are never named on a page or in an error message.
+  hiddenEmailDomains: ""
+  # Named in the mails about a deleted or taken-over account as the place to
+  # turn to. Empty: those mails say to ask whoever runs the installation.
+  contactEmail: ""
+  # Platform owners: comma-separated addresses. Once verified, these accounts
+  # are admins of the dashboard (/admin) that cannot be demoted or locked out.
+  adminEmails: ""
+
+  # Where the dashboard's "Source" link points. Empty uses the image's
+  # default, the upstream repository. Set it when you run a modified version:
+  # the AGPL asks you to offer your users the source you run.
+  sourceUrl: ""
+
+  # "log" writes mail to the pod log instead of sending it. Set the SMTP
+  # values (and secrets.mailPassword) to send for real. Registration and
+  # password resets need working mail.
+  mail:
+    mailer: log
+    host: ""
+    port: "587"
+    username: ""
+    # Defaults to noreply@<web.host>. Even the "log" mailer needs a sender.
+    fromAddress: ""
+    fromName: exposehub
+
+  # Teams' own domains: the dashboard creates one Ingress per connected domain
+  # in this namespace, routed to the tunnel server, and cert-manager issues
+  # its certificate through clusterIssuer (HTTP-01). Needs ingress.className
+  # and adds a ServiceAccount and a Role limited to Ingress objects here.
+  customDomains:
+    enabled: false
+    # Defaults to web.ingress.tls.clusterIssuer.
+    clusterIssuer: ""
+
+  # New passwords are checked against the breached-password list at this
+  # host (only the first five characters of the password's hash leave the
+  # cluster). Used by the Cilium network policy to open exactly that host.
+  passwordCheckHost: api.pwnedpasswords.com
+
+  # How many days the dashboard keeps request logs.
+  logRetentionDays: 7
+
+  # How much one person or team may set up. 0 allows none.
+  limits:
+    # Teams one person owns.
+    teamsPerUser: 10
+    # Saved addresses one person keeps, across all their teams.
+    savedAddressesPerUser: 25
+    # Networks of one team. Every team's networks and domains go to the
+    # tunnel server in one shared token list.
+    networksPerTeam: 25
+    # Own domains of one team.
+    domainsPerTeam: 25
+    # Sign-ups per IP address and hour; each mails a confirmation link. As
+    # the dashboard sees it: with trusted proxies set right, the visitor's
+    # address. Everyone behind one shared office address counts together, so
+    # raise it if many people sign up from there at once.
+    registrationsPerIpPerHour: 5
+    # Password-reset mails per hour, per IP address and per email address.
+    passwordResetLinksPerIpPerHour: 10
+    passwordResetLinksPerAddressPerHour: 3
+    # Guessing limits, per account; at least 1, as 0 would lock everyone out.
+    # Wrong passwords per minute from a signed-in session (password
+    # confirmation, account deletion, password change).
+    passwordChecksPerMinute: 5
+    # Two-factor codes per sign-in, per minute and per day.
+    twoFactorAttemptsPerMinute: 5
+    twoFactorAttemptsPerDay: 20
+    # Wrong codes in a row before the sign-in starts over with the password
+    # and the account holder gets a mail about it.
+    twoFactorFailuresInARow: 5
+
+  extraEnv: []
+
+  # One pod. Sessions and cache live in Postgres, so more replicas would
+  # work; one is enough for a team.
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+  # A second container in the web pod runs the scheduled jobs: deleting
+  # request logs past the retention period and expired invitations.
+  scheduler:
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# The operator's imprint and privacy notice, as Markdown. Empty: the page and
+# its link do not exist. web/resources/legal in the repository has templates.
+legal:
+  imprint: ""
+  privacy: ""
+
+# --- Database ----------------------------------------------------------------
+# A single Postgres in a StatefulSet. Accounts, teams, agent tokens,
+# connected domains and request logs. Back it up (see the docs).
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  db: exposehub
+  user: exposehub
+  # Empty uses the cluster's default storage class.
+  storageClass: ""
+  storageSize: 10Gi
+  resources:
+    requests: { cpu: 25m, memory: 96Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Used when postgres.enabled is false. The password is secrets.dbPassword (or
+# DB_PASSWORD in secrets.existingSecret).
+externalDatabase:
+  host: ""
+  port: 5432
+  database: exposehub
+  username: exposehub
+  # disable, prefer, require, verify-ca or verify-full. Empty: Laravel's
+  # default (prefer).
+  sslmode: ""
+
+# --- Ingress and certificates for the tunnels --------------------------------
+ingress:
+  enabled: true
+  # Empty uses the cluster's default IngressClass.
+  className: ""
+  annotations: {}
+  # Defaults to <fullname>-tunnels-tls.
+  tlsSecretName: ""
+
+  # Tunnels carry uploads and long-lived connections, so the defaults that
+  # suit a web app are wrong here. These are ingress-nginx annotations
+  # (also read by Traefik's ingress-nginx provider): "0" lifts the body size
+  # limit, the timeouts are per read/write, not per request. Agents hold one
+  # WebSocket open and ping every 20 s. Other controllers ignore them; set
+  # their equivalents in ingress.annotations.
+  nginxTuning:
+    enabled: true
+    proxyBodySize: "0"
+    proxyReadTimeout: "3600"
+    proxySendTimeout: "3600"
+
+  # Where the wildcard certificate for *.<tunnelDomain> comes from. A
+  # wildcard certificate can only be issued over DNS-01.
+  #   issuer:        this chart creates a namespaced cert-manager Issuer with
+  #                  certificate.issuer.solvers, passed through verbatim
+  #   clusterIssuer: an existing ClusterIssuer that can solve DNS-01 for the
+  #                  tunnel domain
+  #   secret:        you provide the TLS secret named ingress.tlsSecretName
+  certificate:
+    mode: issuer
+    clusterIssuer: ""
+    issuer:
+      # Defaults to <fullname>-letsencrypt.
+      name: ""
+      # The ACME account's contact address. Required in issuer mode.
+      email: ""
+      server: https://acme-v02.api.letsencrypt.org/directory
+      # cert-manager ACME solvers. Example for Cloudflare, with the token in a
+      # secret you create in this namespace:
+      #   solvers:
+      #     - dns01:
+      #         cloudflare:
+      #           apiTokenSecretRef:
+      #             name: cloudflare-api-token
+      #             key: api-token
+      # See https://cert-manager.io/docs/configuration/acme/dns01/ for other
+      # providers.
+      solvers: []
+
+# --- Network policy ----------------------------------------------------------
+# kubernetes: standard NetworkPolicy (default). The server is reachable only from the
+#             ingress controller, the dashboard only from the ingress
+#             controller and the server, Postgres only from the dashboard.
+#             The server and Postgres may only reach DNS (and the server the
+#             dashboard). The dashboard's egress stays open: it needs the
+#             internet for mail and the password check, and the API server
+#             for custom domains, neither of which a standard policy can name.
+# cilium:     CiliumNetworkPolicy with the same rules, plus dashboard egress
+#             limited to its Postgres, DNS, web.passwordCheckHost by name, the
+#             API server (custom domains) and the SMTP port (mail).
+# none:       no policies: every pod in the cluster can reach the server and
+#             the dashboard. Then server.trustedProxies must name only the
+#             ingress controller's own addresses, not the pod CIDR.
+networkPolicy:
+  type: kubernetes
+  # Namespace of the ingress controller's pods. Required unless type is none:
+  # set it, or choose type none on purpose.
+  ingressNamespace: ""
+  # kubernetes only: further sources allowed to reach the server and the
+  # dashboard on 8080, as NetworkPolicy peers. Needed when the ingress
+  # controller uses the host network, for example:
+  #   - ipBlock: { cidr: 10.0.0.0/16 }
+  extraIngressFrom: []
+
+# --- Secrets -----------------------------------------------------------------
+# Either set the values below or name an existing Secret with the same keys:
+#   EXPOSEHUB_NODE_SECRET    shared by server and dashboard (openssl rand -hex 32)
+#   APP_KEY                  "base64:" + 32 random bytes (echo "base64:$(openssl rand -base64 32)")
+#   DB_PASSWORD              Postgres password (openssl rand -hex 24)
+#   MAIL_PASSWORD            optional, SMTP password
+#   EXPOSEHUB_STATIC_TOKENS  optional, "account:token,..." accepted alongside
+#                            tokens created in the dashboard
+# The server only reads EXPOSEHUB_NODE_SECRET and EXPOSEHUB_STATIC_TOKENS from it.
+secrets:
+  existingSecret: ""
+  nodeSecret: ""
+  # Changing it signs everyone out and invalidates two-factor secrets.
+  appKey: ""
+  dbPassword: ""
+  mailPassword: ""
+  staticTokens: ""

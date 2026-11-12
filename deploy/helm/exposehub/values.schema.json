@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["server", "web", "secrets"],
+  "properties": {
+    "server": {
+      "type": "object",
+      "required": ["tunnelDomain", "trustedProxies"],
+      "properties": {
+        "tunnelDomain": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9.-]+$",
+          "description": "Tunnels get subdomains of this domain, e.g. tunnels.example.net"
+        },
+        "additionalTunnelDomains": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9.-]+$" }
+        },
+        "agentHost": { "type": "string" },
+        "trustedProxies": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Addresses of the ingress controller's pods. The pod CIDR only together with a network policy (networkPolicy.type kubernetes or cilium)"
+        },
+        "publicScheme": {
+          "enum": ["http", "https"]
+        },
+        "publicPort": {
+          "type": ["integer", "string"]
+        },
+        "logLevel": {
+          "enum": ["debug", "info", "warn", "error"]
+        },
+        "logFormat": {
+          "enum": ["text", "json"]
+        },
+        "requestLogs": { "type": "boolean" },
+        "controlPlaneMaxStale": {
+          "type": ["string", "integer"],
+          "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "minimum": 0,
+          "maximum": 0,
+          "description": "A duration like 5m: how long dashboard tokens keep working without a fresh token list. 0 keeps the last list forever"
+        },
+        "extraEnv": { "type": "array" }
+      }
+    },
+    "web": {
+      "type": "object",
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9.-]+$",
+          "description": "The dashboard's public hostname, e.g. dash.example.com"
+        },
+        "mail": {
+          "type": "object",
+          "properties": {
+            "mailer": {
+              "enum": ["log", "smtp"]
+            }
+          }
+        },
+        "customDomains": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        },
+        "logRetentionDays": { "type": "integer", "minimum": 1 },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "teamsPerUser": { "type": "integer", "minimum": 0 },
+            "savedAddressesPerUser": { "type": "integer", "minimum": 0 },
+            "networksPerTeam": { "type": "integer", "minimum": 0 },
+            "domainsPerTeam": { "type": "integer", "minimum": 0 },
+            "registrationsPerIpPerHour": { "type": "integer", "minimum": 0 },
+            "passwordResetLinksPerIpPerHour": { "type": "integer", "minimum": 0 },
+            "passwordResetLinksPerAddressPerHour": { "type": "integer", "minimum": 0 },
+            "passwordChecksPerMinute": { "type": "integer", "minimum": 1 },
+            "twoFactorAttemptsPerMinute": { "type": "integer", "minimum": 1 },
+            "twoFactorAttemptsPerDay": { "type": "integer", "minimum": 1 },
+            "twoFactorFailuresInARow": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "extraEnv": { "type": "array" }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "certificate": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["issuer", "clusterIssuer", "secret"]
+            },
+            "issuer": {
+              "type": "object",
+              "properties": {
+                "solvers": { "type": "array" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["none", "kubernetes", "cilium"]
+        },
+        "extraIngressFrom": { "type": "array" }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "nodeSecret": { "type": "string" },
+        "appKey": { "type": "string" },
+        "dbPassword": { "type": "string" },
+        "mailPassword": { "type": "string" },
+        "staticTokens": { "type": "string" }
+      },
+      "if": {
+        "properties": {
+          "existingSecret": { "const": "" }
+        }
+      },
+      "then": {
+        "properties": {
+          "nodeSecret": { "minLength": 32 },
+          "appKey": { "pattern": "^base64:" },
+          "dbPassword": { "minLength": 16 }
+        }
+      }
+    }
+  }
+}

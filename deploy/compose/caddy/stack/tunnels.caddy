@@ -1,0 +1,2 @@
+# Tunnels only: no dashboard, so no accounts and no teams' own domains.
+# Imported by the Caddyfile when EXPOSEHUB_STACK=tunnels.

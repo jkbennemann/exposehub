@@ -1,0 +1,2 @@
+# DigitalOcean personal access token with domain read and write scopes.
+dns digitalocean {env.DIGITALOCEAN_API_TOKEN}

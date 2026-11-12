@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- The link preview image (public/og.png, 1200x630). Regenerate after a change by opening this file
+     in a browser at 1200x630 and saving a screenshot, e.g. with Playwright. Domain-neutral on purpose:
+     every installation uses its own domain. Fonts: npm packages @fontsource/*. --><html><head><meta charset="utf-8"><style>
+@font-face{font-family:BSC;font-weight:600;src:url("../../node_modules/@fontsource/barlow-semi-condensed/files/barlow-semi-condensed-latin-600-normal.woff2")}
+@font-face{font-family:Barlow;font-weight:400;src:url("../../node_modules/@fontsource/barlow/files/barlow-latin-400-normal.woff2")}
+@font-face{font-family:Mono;font-weight:500;src:url("../../node_modules/@fontsource/spline-sans-mono/files/spline-sans-mono-latin-500-normal.woff2")}
+*{margin:0;box-sizing:border-box}
+html,body{width:1200px;height:630px;background:#15173d;overflow:hidden}
+.glow{position:absolute;width:900px;height:900px;left:520px;top:-380px;border-radius:50%;background:radial-gradient(circle,rgba(255,197,49,.13) 0%,transparent 62%)}
+.logo{position:absolute;left:80px;top:72px;display:flex;align-items:center;gap:20px;color:#fff;font:600 46px/1 BSC;letter-spacing:-.01em}
+.logo svg{width:76px;height:38px}
+h1{position:absolute;left:80px;top:170px;width:900px;color:#f5f6f9;font:600 92px/0.98 BSC;letter-spacing:-.02em}
+.cmd{position:absolute;left:80px;top:410px;display:flex;gap:18px;padding:18px 28px;border-radius:12px;background:#0d0f2b;border:2px solid #2f3260;font:500 34px/1 Mono;color:#ebedf2}
+.cmd .p{color:#9197ae}
+.cable{position:absolute;left:98px;right:98px;top:551px;height:8px;border-radius:4px;background:#ffc531}
+.jack{position:absolute;top:537px;width:36px;height:36px;border-radius:50%;background:#ffc531}
+.jack::after{content:"";position:absolute;left:11px;top:11px;width:14px;height:14px;border-radius:50%;background:#15173d}
+.pk{position:absolute;top:545px;width:46px;height:20px;border-radius:10px}
+</style></head><body>
+
+<div class="logo"><svg viewBox="0 0 32 16"><path d="M6 8h20" stroke="#ffc531" stroke-width="3.5" stroke-linecap="round"/><circle cx="5" cy="8" r="4" fill="#ffc531"/><circle cx="27" cy="8" r="4" fill="#ffc531"/><circle cx="5" cy="8" r="1.5" fill="#15173d"/><circle cx="27" cy="8" r="1.5" fill="#15173d"/></svg>exposehub</div>
+<h1>A public address for a port on your machine</h1>
+<div class="cmd"><span class="p">$</span><span>exposehub http 8000</span></div>
+<div class="cable"></div><div class="jack" style="left:80px"></div><div class="jack" style="right:80px"></div>
+<div class="pk" style="left:420px;background:#d9dce6"></div><div class="pk" style="left:760px;background:#14b8b0"></div>
+</body></html>

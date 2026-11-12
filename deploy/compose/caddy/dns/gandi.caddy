@@ -1,0 +1,3 @@
+# Gandi personal access token with the "Manage domain name technical
+# configurations" permission.
+dns gandi {env.GANDI_BEARER_TOKEN}

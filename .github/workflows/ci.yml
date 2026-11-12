@@ -1,0 +1,143 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # The release workflow runs the same checks before it publishes anything.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Dashboard (web/)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Setup application
+        run: composer setup
+
+      - name: Lint, types and tests
+        run: composer ci:check
+
+  tunnel:
+    name: Tunnel server and agent (tunnel/)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: tunnel
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tunnel/go.mod
+          cache-dependency-path: tunnel/go.sum
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+  shell:
+    name: Shell scripts (deploy/)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # shellcheck is preinstalled on GitHub's Ubuntu runners.
+      - name: shellcheck
+        run: |
+          mapfile -t scripts < <(find deploy -type f -name '*.sh' 2>/dev/null | sort)
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "No shell scripts under deploy/."
+            exit 0
+          fi
+          shellcheck --severity=style "${scripts[@]}"
+
+      # A module without a version is fetched as whatever its publisher
+      # released last at build time, and would ship unseen in a release.
+      - name: Caddy modules carry exact versions
+        run: |
+          dockerfile=deploy/caddy/Dockerfile
+          modules="$(grep -oE -- '--with[= ]+[^[:space:]\\]+' "$dockerfile" | sed -E 's/^--with[= ]+//' || true)"
+          if [ -z "$modules" ]; then
+            echo "No --with lines found in $dockerfile; update this check."
+            exit 1
+          fi
+          unpinned="$(printf '%s\n' "$modules" | grep -vE '@v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' || true)"
+          if [ -n "$unpinned" ]; then
+            echo "These Caddy modules in $dockerfile have no exact version (module@vX.Y.Z):"
+            echo "$unpinned"
+            exit 1
+          fi
+          echo "$(printf '%s\n' "$modules" | grep -c .) modules, all pinned."
+
+  helm:
+    name: Helm chart (deploy/helm/exposehub)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Helm
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+
+      - name: helm lint and template
+        run: |
+          # The chart has required values, so it is checked with each example
+          # values file in ci/ rather than with its bare defaults.
+          chart=deploy/helm/exposehub
+          for values in "$chart"/ci/*-values.yaml; do
+            echo "== $values"
+            helm lint --strict "$chart" -f "$values"
+            helm template exposehub "$chart" -f "$values" > /dev/null
+          done

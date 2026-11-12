@@ -1,0 +1,288 @@
+# exposehub on one host with Docker Compose.
+#
+# Run ./install.sh first: it writes .env (and caddy.env with the DNS
+# provider's credentials), then start everything with
+#
+#   docker compose up -d --wait
+#
+# The image version below belongs to this checkout. Upgrading means checking
+# out a newer release tag and running ./install.sh again; see
+# docs/self-hosting/compose.md. Set EXPOSEHUB_VERSION in .env only to test
+# another build on purpose.
+#
+# Profiles: "dashboard" (set in COMPOSE_PROFILES by install.sh for the full
+# stack) adds the dashboard, its scheduled jobs and Postgres. Without it,
+# Caddy and the tunnel server run alone with static tokens.
+
+name: exposehub
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Every container except Postgres runs as an unprivileged user on a
+# read-only filesystem, without capabilities, and cannot gain privileges.
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  logging: *logging
+
+# The dashboard's settings, shared by web, scheduler and migrate.
+x-web-environment: &web-environment
+  APP_NAME: exposehub
+  APP_URL: https://${EXPOSEHUB_DASHBOARD_HOST:-}${EXPOSEHUB_PORT_SUFFIX:-}
+  APP_KEY: ${APP_KEY:?run ./install.sh first}
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: exposehub
+  DB_USERNAME: exposehub
+  DB_PASSWORD: ${DB_PASSWORD:?run ./install.sh first}
+  SESSION_DRIVER: database
+  SESSION_SECURE_COOKIE: "true"
+  CACHE_STORE: database
+  QUEUE_CONNECTION: sync
+  MAIL_MAILER: ${MAIL_MAILER:-log}
+  MAIL_HOST: ${MAIL_HOST:-127.0.0.1}
+  MAIL_PORT: ${MAIL_PORT:-587}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@${EXPOSEHUB_DASHBOARD_HOST:-localhost}}
+  MAIL_FROM_NAME: exposehub
+  EXPOSEHUB_AGENT_SERVER: https://connect.${EXPOSEHUB_TUNNEL_DOMAIN:-}${EXPOSEHUB_PORT_SUFFIX:-}
+  EXPOSEHUB_TUNNEL_DOMAIN: ${EXPOSEHUB_TUNNEL_DOMAIN:-}
+  EXPOSEHUB_NODE_SECRET: ${EXPOSEHUB_NODE_SECRET:?run ./install.sh first}
+  EXPOSEHUB_ALLOWED_EMAIL_DOMAINS: ${EXPOSEHUB_ALLOWED_EMAIL_DOMAINS:-}
+  EXPOSEHUB_HIDDEN_EMAIL_DOMAINS: ${EXPOSEHUB_HIDDEN_EMAIL_DOMAINS:-}
+  EXPOSEHUB_ADMIN_EMAILS: ${EXPOSEHUB_ADMIN_EMAILS:-}
+  EXPOSEHUB_CONTACT_EMAIL: ${EXPOSEHUB_CONTACT_EMAIL:-}
+  EXPOSEHUB_LOG_RETENTION_DAYS: ${EXPOSEHUB_LOG_RETENTION_DAYS:-7}
+  # How much one person or team may set up; see "Limits" in the README.
+  EXPOSEHUB_MAX_TEAMS_PER_USER: ${EXPOSEHUB_MAX_TEAMS_PER_USER:-10}
+  EXPOSEHUB_MAX_SAVED_ADDRESSES_PER_USER: ${EXPOSEHUB_MAX_SAVED_ADDRESSES_PER_USER:-25}
+  EXPOSEHUB_MAX_NETWORKS_PER_TEAM: ${EXPOSEHUB_MAX_NETWORKS_PER_TEAM:-25}
+  EXPOSEHUB_MAX_DOMAINS_PER_TEAM: ${EXPOSEHUB_MAX_DOMAINS_PER_TEAM:-25}
+  # Sign-ups and password-reset mails per hour.
+  EXPOSEHUB_MAX_REGISTRATIONS_PER_IP_PER_HOUR: ${EXPOSEHUB_MAX_REGISTRATIONS_PER_IP_PER_HOUR:-5}
+  EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_IP_PER_HOUR: ${EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_IP_PER_HOUR:-10}
+  EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_ADDRESS_PER_HOUR: ${EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_ADDRESS_PER_HOUR:-3}
+  # Wrong passwords inside a session and two-factor codes, per account.
+  EXPOSEHUB_MAX_PASSWORD_CHECKS_PER_MINUTE: ${EXPOSEHUB_MAX_PASSWORD_CHECKS_PER_MINUTE:-5}
+  EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_MINUTE: ${EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_MINUTE:-5}
+  EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_DAY: ${EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_DAY:-20}
+  EXPOSEHUB_MAX_TWO_FACTOR_FAILURES_IN_A_ROW: ${EXPOSEHUB_MAX_TWO_FACTOR_FAILURES_IN_A_ROW:-5}
+  EXPOSEHUB_TRUSTED_PROXIES: ${EXPOSEHUB_CADDY_ADDRESS:-172.30.53.10}
+  # Caddy obtains certificates for teams' own domains on demand, after
+  # asking the tunnel server, so the dashboard has nothing to set up.
+  EXPOSEHUB_DOMAIN_PROVISIONER: none
+  EXPOSEHUB_LEGAL_PATH: /legal
+
+# Writable paths of the dashboard image; nothing in them has to survive a
+# restart (sessions, cache and everything else live in Postgres).
+x-web-tmpfs: &web-tmpfs
+  - /app/storage:uid=33,gid=33,mode=0750
+  - /app/bootstrap/cache:uid=33,gid=33,mode=0750
+  - /data:uid=33,gid=33,mode=0750
+  - /config:uid=33,gid=33,mode=0750
+  - /tmp
+
+x-web-image: &web-image ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-web:${EXPOSEHUB_VERSION:-0.1.0}
+
+services:
+  # The only service with published ports. Terminates TLS for the dashboard,
+  # every tunnel and teams' own domains; see caddy/Caddyfile.
+  caddy:
+    <<: *hardening
+    image: ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-caddy:${EXPOSEHUB_VERSION:-0.1.0}
+    # IPv4 only. Docker would also publish on the host's IPv6 addresses and
+    # relay those visitors into this IPv4-only network through docker-proxy,
+    # which replaces each visitor's address with the network's gateway. Every
+    # IPv6 visitor would then share one private address, and network rules
+    # and login limits would act on that address instead of theirs. See
+    # "IPv6" in docs/self-hosting/compose.md.
+    ports:
+      - "0.0.0.0:${EXPOSEHUB_HTTP_PORT:-80}:80"
+      - "0.0.0.0:${EXPOSEHUB_HTTPS_PORT:-443}:443/tcp"
+      - "0.0.0.0:${EXPOSEHUB_HTTPS_PORT:-443}:443/udp"
+    environment:
+      EXPOSEHUB_TLS_MODE: ${EXPOSEHUB_TLS_MODE:?run ./install.sh first}
+      # Requests from inside this network were relayed by Docker; outside the
+      # internal mode Caddy refuses them (see caddy/Caddyfile).
+      EXPOSEHUB_SUBNET: ${EXPOSEHUB_SUBNET:-172.30.53.0/24}
+      EXPOSEHUB_STACK: ${EXPOSEHUB_STACK:-full}
+      EXPOSEHUB_DNS_PROVIDER: ${EXPOSEHUB_DNS_PROVIDER:-none}
+      EXPOSEHUB_TUNNEL_DOMAIN: ${EXPOSEHUB_TUNNEL_DOMAIN:?run ./install.sh first}
+      EXPOSEHUB_DASHBOARD_HOST: ${EXPOSEHUB_DASHBOARD_HOST:-}
+      EXPOSEHUB_ACME_EMAIL: ${EXPOSEHUB_ACME_EMAIL:-}
+    # The DNS provider's credentials, and nothing else of the install's secrets.
+    env_file:
+      - path: caddy.env
+        required: false
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs:
+      - /tmp
+    networks:
+      edge:
+        # Fixed, because the tunnel server and the dashboard believe
+        # X-Forwarded-For only from this address.
+        ipv4_address: ${EXPOSEHUB_CADDY_ADDRESS:-172.30.53.10}
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # The tunnel server: agents connect to it, visitors reach tunnels through
+  # it. One instance only, because tunnels live in its memory.
+  server:
+    <<: *hardening
+    image: ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-server:${EXPOSEHUB_VERSION:-0.1.0}
+    environment:
+      EXPOSEHUB_LISTEN: ":8080"
+      # Caddy's ask endpoint and the health check; not published.
+      EXPOSEHUB_INTERNAL_LISTEN: ":9090"
+      EXPOSEHUB_AGENT_HOST: connect.${EXPOSEHUB_TUNNEL_DOMAIN:?run ./install.sh first}
+      EXPOSEHUB_TUNNEL_DOMAINS: ${EXPOSEHUB_TUNNEL_DOMAIN}
+      EXPOSEHUB_PUBLIC_SCHEME: https
+      EXPOSEHUB_PUBLIC_PORT: ${EXPOSEHUB_HTTPS_PORT:-443}
+      EXPOSEHUB_TRUSTED_PROXIES: ${EXPOSEHUB_CADDY_ADDRESS:-172.30.53.10}
+      # Empty in the tunnels-only stack: then only static tokens work.
+      EXPOSEHUB_CONTROL_PLANE_URL: ${EXPOSEHUB_CONTROL_PLANE_URL-http://web:8080}
+      EXPOSEHUB_NODE_SECRET: ${EXPOSEHUB_NODE_SECRET:?run ./install.sh first}
+      EXPOSEHUB_STATIC_TOKENS: ${EXPOSEHUB_STATIC_TOKENS:-}
+      # How long dashboard tokens keep working when the dashboard cannot be
+      # reached; static tokens always do. 0 means forever.
+      EXPOSEHUB_CONTROL_PLANE_MAX_STALE: ${EXPOSEHUB_CONTROL_PLANE_MAX_STALE:-5m}
+      EXPOSEHUB_TLS_ASK_TUNNEL_NAMES: ${EXPOSEHUB_TLS_ASK_TUNNEL_NAMES:-false}
+      # New tunnel names that may get a certificate within the window: in
+      # total under the tunnel domain, and per team (below the total).
+      EXPOSEHUB_TLS_ASK_TOTAL_LIMIT: ${EXPOSEHUB_TLS_ASK_TOTAL_LIMIT:-40}
+      EXPOSEHUB_TLS_ASK_NAME_LIMIT: ${EXPOSEHUB_TLS_ASK_NAME_LIMIT:-10}
+      EXPOSEHUB_TLS_ASK_NAME_WINDOW: ${EXPOSEHUB_TLS_ASK_NAME_WINDOW:-168h}
+      EXPOSEHUB_CUSTOM_DOMAIN_HEADERS: ${EXPOSEHUB_CUSTOM_DOMAIN_HEADERS:-}
+      EXPOSEHUB_GRACE_PERIOD: ${EXPOSEHUB_GRACE_PERIOD:-1m}
+      EXPOSEHUB_REQUEST_LOGS: ${EXPOSEHUB_REQUEST_LOGS:-on}
+      EXPOSEHUB_LOG_LEVEL: ${EXPOSEHUB_LOG_LEVEL:-info}
+      EXPOSEHUB_LOG_FORMAT: ${EXPOSEHUB_LOG_FORMAT:-text}
+      # Tokens and domains mirrored from the dashboard, so agents can
+      # reconnect after a restart while the dashboard is down. The image's
+      # home directory belongs to the server's user, and a new volume takes
+      # over that ownership.
+      EXPOSEHUB_DATA_DIR: /home/nonroot
+    volumes:
+      - server-data:/home/nonroot
+    tmpfs:
+      - /tmp
+    networks: [edge]
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "/exposehub-server", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  web:
+    <<: *hardening
+    profiles: [dashboard]
+    image: *web-image
+    environment: *web-environment
+    volumes:
+      - ./legal:/legal:ro
+    tmpfs: *web-tmpfs
+    networks: [edge, backend]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/up') === false ? 1 : 0);"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Scheduled jobs: deleting request logs past their retention and expired
+  # invitations.
+  scheduler:
+    <<: *hardening
+    profiles: [dashboard]
+    image: *web-image
+    command: ["php", "artisan", "schedule:work"]
+    environment: *web-environment
+    volumes:
+      - ./legal:/legal:ro
+    tmpfs: *web-tmpfs
+    networks: [edge, backend]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # The base image's check asks a web server this container does not run.
+    healthcheck:
+      disable: true
+
+  # Runs the database migrations to completion before a new version of the
+  # dashboard serves a request, on every start.
+  migrate:
+    <<: *hardening
+    profiles: [dashboard]
+    image: *web-image
+    command: ["php", "artisan", "migrate", "--force"]
+    restart: "no"
+    environment: *web-environment
+    tmpfs: *web-tmpfs
+    networks: [backend]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [dashboard]
+    restart: unless-stopped
+    logging: *logging
+    security_opt: [no-new-privileges:true]
+    environment:
+      POSTGRES_DB: exposehub
+      POSTGRES_USER: exposehub
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?run ./install.sh first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [backend]
+    shm_size: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exposehub -d exposehub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  # Caddy, the tunnel server and the dashboard. A fixed subnet, so Caddy's
+  # address is known in advance. Change EXPOSEHUB_SUBNET and
+  # EXPOSEHUB_CADDY_ADDRESS together if it collides with a network of yours.
+  edge:
+    ipam:
+      config:
+        - subnet: ${EXPOSEHUB_SUBNET:-172.30.53.0/24}
+  # Postgres has no way out and no way in except from the dashboard.
+  backend:
+    internal: true
+
+volumes:
+  caddy-data:
+  caddy-config:
+  server-data:
+  postgres-data:

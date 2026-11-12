@@ -1,0 +1,37 @@
+{{- if .Values.web.customDomains.enabled }}
+# The dashboard creates one Ingress per domain a team connects, routed to the
+# tunnel server, and cert-manager issues the certificate for it. The rights
+# are limited to Ingress objects in this namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "eh.webName" . }}
+  labels:
+    {{- include "eh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "eh.webName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "eh.webName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

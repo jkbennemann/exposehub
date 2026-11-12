@@ -1,0 +1,9 @@
+# Written by install.sh; they hold the install's secrets.
+.env
+.env.before-restore-*
+caddy.env
+caddy.env.before-restore-*
+backups/
+# The operator's own texts.
+legal/*.md
+!legal/README.md
