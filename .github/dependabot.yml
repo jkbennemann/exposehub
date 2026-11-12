@@ -42,6 +42,16 @@ updates:
     groups:
       npm:
         update-types: ["minor", "patch"]
+    ignore:
+      # vite-plus moves together with the "vite" alias and its override in
+      # package.json, which an automatic update leaves behind; the build then
+      # fails. Raise all three by hand.
+      - dependency-name: "vite-plus"
+      - dependency-name: "@voidzero-dev/vite-plus-core"
+      # The browser half of laravel/passkeys, which Composer installs for
+      # Fortify. Both halves change together, with a look at passkey sign-in.
+      - dependency-name: "@laravel/passkeys"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directories:
@@ -56,3 +66,9 @@ updates:
       docker:
         patterns:
           - "*"
+    ignore:
+      # The Node major is the same in web/Dockerfile, the CI workflow and
+      # CONTRIBUTING.md, and stays on a long-term-support release. Change it
+      # in all three by hand.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

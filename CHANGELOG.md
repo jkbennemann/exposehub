@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The dashboard's assets are built with vite-plus 1.5.0.
+
 ## [0.1.0] - 2026-11-12
 
 First public release.
