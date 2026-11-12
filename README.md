@@ -40,6 +40,20 @@ No server yet? [Try it locally](#try-it-locally) runs server, agent and a test s
 - **Made for a team.** Teams, one token per machine, request logs with secrets redacted, a Tunnels page to close one you left running at home, and an admin area with an audit log.
 - **Self-hosting in one script.** `install.sh` and Docker Compose on one Linux server, with certificates issued automatically, or a Helm chart for Kubernetes. Every setting is an environment variable.
 
+The inspector on your own machine, with a webhook that failed opened for a closer look and a replay:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/inspector-dark.png">
+  <img src="docs/images/inspector-light.png" alt="The local inspector: a list of requests on the left, and on the right the headers and JSON body of a POST to /webhooks/stripe that was answered with 500, with Replay and Copy as curl buttons">
+</picture>
+
+The dashboard's Tunnels page, where a team sees what is connected and disconnects a tunnel someone left running:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/tunnels-dark.png">
+  <img src="docs/images/tunnels-light.png" alt="The Tunnels page: three connected agents with their public addresses, one of them being disconnected">
+</picture>
+
 ## What passes through
 
 | Traffic | Works | Checked by |
