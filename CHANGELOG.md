@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
 ### Added
 
 - Coding agents. Every dashboard publishes instructions for agents at `/agents.md`, with its own addresses; the Overview and the docs offer one sentence to hand to Claude Code, Cursor, Codex and others. The agent asks the person to run `exposehub login` and never handles the token.
@@ -128,7 +130,8 @@ First public release.
 - The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
 - The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
 
-[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.4.0
 [0.3.2]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.0

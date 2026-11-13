@@ -127,7 +127,7 @@ Other values worth knowing, all documented in the chart's `values.yaml`:
 
 ```sh
 helm install exposehub oci://ghcr.io/jkbennemann/charts/exposehub \
-  --version 0.3.2 --namespace exposehub -f values.yaml
+  --version 0.4.0 --namespace exposehub -f values.yaml
 kubectl -n exposehub get certificate,pods
 ```
 
@@ -203,7 +203,7 @@ The chart, the images and the agent share one version. Read the release notes, t
 
 ```sh
 helm upgrade exposehub oci://ghcr.io/jkbennemann/charts/exposehub \
-  --version 0.3.2 --namespace exposehub -f values.yaml
+  --version 0.4.0 --namespace exposehub -f values.yaml
 ```
 
 Database migrations run in an init container before the new dashboard serves a request. The tunnel server restarts with the upgrade; agents reconnect by themselves within a few seconds and keep their addresses. Installed agents pick up the new version with `exposehub update`.

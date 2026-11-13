@@ -34,7 +34,7 @@ Tunnel names can also change hands: a name nobody saved is free for any team a m
 ## Install
 
 ```sh
-git clone --branch v0.3.2 https://github.com/jkbennemann/exposehub.git
+git clone --branch v0.4.0 https://github.com/jkbennemann/exposehub.git
 cd exposehub/deploy/compose
 ./install.sh
 docker compose up -d --wait
