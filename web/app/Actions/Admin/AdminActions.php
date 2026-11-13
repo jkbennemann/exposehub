@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\Account\AccountNotice;
 use App\Support\AccountMail;
 use App\Support\Domains\Provisioner;
+use App\Support\Sso\Sso;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -133,6 +134,12 @@ class AdminActions
         // mail sent to it may do that, never an admin, owners included.
         if ($user->hasOwnerAddress()) {
             throw new AuthorizationException(__('A platform owner address can only be confirmed through the link mailed to it.'));
+        }
+        // An account with a confirmed address of the identity provider's
+        // domains is tied to whoever the provider signs in with that address.
+        // Confirmed by an admin, an account someone else made would be theirs.
+        if (Sso::enabled() && Sso::answersFor($user->email)) {
+            throw new AuthorizationException(__('Addresses of this domain are confirmed by signing in with :name.', ['name' => Sso::name()]));
         }
 
         $user->markEmailAsVerified();

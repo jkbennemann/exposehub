@@ -10,6 +10,7 @@ use App\Support\AccountMail;
 use App\Support\Sso\Claims;
 use App\Support\Sso\Sso;
 use App\Support\Sso\SsoException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -36,7 +37,29 @@ class SignInThroughProvider
      */
     public function handle(Claims $claims): User
     {
-        [$user, $linked] = DB::transaction(function () use ($claims) {
+        try {
+            [$user, $linked] = $this->accountFor($claims);
+        } catch (UniqueConstraintViolationException) {
+            // Two first sign-ins of one person at once: the other one made the account.
+            throw new SsoException(__('Signing in did not work. Try again.'));
+        }
+
+        if ($linked) {
+            AccountMail::send($user, AccountNotice::ssoLinked(Sso::name()));
+        }
+
+        return $user;
+    }
+
+    /**
+     * @return array{User, bool} the account, and whether an existing one was tied to the person just now
+     *
+     * @throws SsoException
+     * @throws UniqueConstraintViolationException
+     */
+    private function accountFor(Claims $claims): array
+    {
+        return DB::transaction(function () use ($claims) {
             $identity = UserIdentity::query()
                 ->where('issuer', Sso::issuer())
                 ->where('subject', $claims->subject)
@@ -46,6 +69,7 @@ class SignInThroughProvider
             if ($identity !== null) {
                 $user = $identity->user;
                 $this->refuseIfSuspended($user);
+                $this->refuseOwners($user->email);
                 $this->followAddress($user, $claims);
                 $identity->update(['signed_in_at' => now(), 'reminded_at' => null]);
 
@@ -73,12 +97,6 @@ class SignInThroughProvider
 
             return [$user, $linked];
         });
-
-        if ($linked) {
-            AccountMail::send($user, AccountNotice::ssoLinked(Sso::name()));
-        }
-
-        return $user;
     }
 
     /**
@@ -97,8 +115,30 @@ class SignInThroughProvider
         if (! Sso::answersFor($claims->email)) {
             throw new SsoException(__('You are signed in to :name as :email, an address this service does not take from it.', ['name' => Sso::name(), 'email' => $claims->email]));
         }
+        $this->refuseOwners($claims->email);
 
         return $claims->email;
+    }
+
+    /**
+     * The people who run the install are who they are without the provider:
+     * their addresses are the way in when it is down, and whoever holds one
+     * with a confirmed address runs the install. So the provider's word never
+     * signs anyone in as one of them, makes such an account, or moves an
+     * account to such an address.
+     *
+     * @throws SsoException
+     */
+    private function refuseOwners(string $email): void
+    {
+        if ($this->isOwnerAddress($email)) {
+            throw new SsoException(__('This address belongs to the people who run this service. It signs in with its password or passkey, not with :name.', ['name' => Sso::name()]));
+        }
+    }
+
+    private function isOwnerAddress(string $email): bool
+    {
+        return in_array(Str::lower($email), config('exposehub.admin_emails', []), true);
     }
 
     private function create(Claims $claims, string $email): User
@@ -134,7 +174,7 @@ class SignInThroughProvider
     private function followAddress(User $user, Claims $claims): void
     {
         $email = $claims->email;
-        if ($email === null || $email === Str::lower($user->email) || ! Sso::answersFor($email)
+        if ($email === null || $email === Str::lower($user->email) || ! Sso::answersFor($email) || $this->isOwnerAddress($email)
             || (config('exposehub.sso.require_verified_email') && ! $claims->emailVerified)
             || User::query()->whereRaw('lower(email) = ?', [$email])->whereKeyNot($user->id)->exists()) {
             return;

@@ -23,7 +23,8 @@ class RequireSsoSignIn
     {
         $user = $request->user();
 
-        if ($user === null || ! Sso::requiredFor($user) || $request->session()->has('sso.signed_in')) {
+        // The mark names the account it was given to: left behind in a session, it is no good to the next one.
+        if ($user === null || ! Sso::requiredFor($user) || $request->session()->get('sso.signed_in') === $user->id) {
             return $next($request);
         }
 

@@ -90,12 +90,22 @@ class SingleSignOn extends Controller
             return $this->failed($request, $e);
         }
 
+        // Nothing of the session so far belongs to the person now signing in.
+        // Whoever was signed in here before may have confirmed their password,
+        // and that confirmation must not become this person's. Only where a
+        // visitor was headed before signing in is kept.
+        $intended = $request->user() === null ? $request->session()->get('url.intended') : null;
+        $request->session()->invalidate();
+        if (is_string($intended)) {
+            $request->session()->put('url.intended', $intended);
+        }
+
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
-        // What RequireSsoSignIn looks for: this session began at the provider.
-        // Signing in is not a confirmation, as it is not with a password: the
-        // admin area and the security page ask again.
-        $request->session()->put('sso.signed_in', now()->getTimestamp());
+        // What RequireSsoSignIn looks for: this session began at the provider,
+        // for this account. Signing in is not a confirmation, as it is not
+        // with a password: the admin area and the security page ask again.
+        $request->session()->put('sso.signed_in', $user->id);
 
         return app(LoginResponse::class)->toResponse($request);
     }

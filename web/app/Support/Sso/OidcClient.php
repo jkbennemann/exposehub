@@ -92,9 +92,19 @@ final class OidcClient
         $token = $this->verified($idToken, $nonce);
         $claims = $this->claims($token);
 
-        // Some providers keep the id token short and say the rest at the userinfo endpoint.
-        if ($claims->email === null && is_string($response->json('access_token')) && isset($discovery['userinfo_endpoint'])) {
-            $claims = $this->withUserinfo($claims, $discovery['userinfo_endpoint'], $response->json('access_token'));
+        // Some providers keep the id token short and say the rest at the
+        // userinfo endpoint: the address, or whether it is confirmed.
+        $incomplete = $claims->email === null || ! property_exists($token, 'email_verified');
+        if ($incomplete && is_string($response->json('access_token')) && isset($discovery['userinfo_endpoint'])) {
+            try {
+                $claims = $this->withUserinfo($claims, $discovery['userinfo_endpoint'], $response->json('access_token'));
+            } catch (SsoException $e) {
+                // Without an address there is nothing to go on. With one, the
+                // token's own word stands, which is that it is not confirmed.
+                if ($claims->email === null) {
+                    throw $e;
+                }
+            }
         }
 
         return $claims;
@@ -121,14 +131,18 @@ final class OidcClient
             $keys = $this->keys(refresh: true);
         }
 
+        // The library takes its clock and its tolerance from static properties;
+        // both go back to what they were, whatever else in the process uses it.
+        [$leeway, $timestamp] = [JWT::$leeway, JWT::$timestamp];
         JWT::$leeway = self::LEEWAY;
         JWT::$timestamp = now()->getTimestamp();
         try {
-            $token = JWT::decode($idToken, $keys);
+            // A provider with a single key may leave the key id out.
+            $token = JWT::decode($idToken, ! is_string($kid) && count($keys) === 1 ? reset($keys) : $keys);
         } catch (Throwable $e) {
             throw new SsoException(__(self::FAILED), 'id token rejected: '.$e->getMessage());
         } finally {
-            JWT::$timestamp = null;
+            [JWT::$leeway, JWT::$timestamp] = [$leeway, $timestamp];
         }
 
         $problem = match (true) {
@@ -190,10 +204,14 @@ final class OidcClient
         }
         $data = (object) $info->json();
 
+        // What the signed token said stands; the endpoint fills in what it left out.
+        $email = $claims->email ?? $this->email($data->email ?? null);
+        $confirmed = ($data->email_verified ?? false) === true || ($data->email_verified ?? false) === 'true';
+
         return new Claims(
             subject: $claims->subject,
-            email: $this->email($data->email ?? null),
-            emailVerified: ($data->email_verified ?? false) === true || ($data->email_verified ?? false) === 'true',
+            email: $email,
+            emailVerified: $claims->emailVerified || ($confirmed && $email !== null && $email === $this->email($data->email ?? null)),
             name: $claims->name ?? $this->name($data),
             authTime: $claims->authTime,
         );

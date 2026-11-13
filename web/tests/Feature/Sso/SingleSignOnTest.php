@@ -171,6 +171,16 @@ class SingleSignOnTest extends TestCase
         $this->assertAuthenticatedAs(User::query()->where('email', 'ada@corp.example')->sole());
         $this->post(route('logout'));
 
+        // A token that names the address but not whether it is confirmed: the endpoint says that too,
+        // but only for the address the token named.
+        $this->userinfo = ['sub' => 'okta|hedy', 'email' => 'hedy@corp.example', 'email_verified' => true];
+        $this->signInThroughProvider(['sub' => 'okta|hedy', 'email' => 'hedy@corp.example', 'email_verified' => null]);
+        $this->assertAuthenticatedAs(User::query()->where('email', 'hedy@corp.example')->sole());
+        $this->post(route('logout'));
+        $this->userinfo = ['sub' => 'okta|joan', 'email' => 'someone-else@corp.example', 'email_verified' => true];
+        $this->signInThroughProvider(['sub' => 'okta|joan', 'email' => 'joan@corp.example', 'email_verified' => null])->assertSessionHasErrors('email');
+        $this->assertGuest();
+
         // An answer about somebody else is not taken.
         $this->userinfo = ['sub' => 'okta|mallory', 'email' => 'grace@corp.example', 'email_verified' => true];
         $this->signInThroughProvider(['sub' => 'okta|grace', 'email' => null])->assertSessionHasErrors('email');
