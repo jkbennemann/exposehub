@@ -8,6 +8,5 @@
 
 ## Checklist
 
-- [ ] I have signed the [CLA](../CLA.md); on a first pull request, the CLA bot asks for it in a comment
 - [ ] Tests pass: `go test -race ./...` in `tunnel/`, `composer test` in `web/`
 - [ ] README, docs and CHANGELOG.md (under "Unreleased") updated where behaviour changed

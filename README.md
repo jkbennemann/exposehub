@@ -155,7 +155,7 @@ curl http://demo.localhost:8080/
 
 ## Contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the tests and the contributor licence agreement, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) how we treat each other.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the tests and the licence your contribution comes in under, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) how we treat each other.
 
 ## Layout
 

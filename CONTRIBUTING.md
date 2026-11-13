@@ -4,17 +4,9 @@ Thanks for wanting to help. Bug reports, fixes, documentation and features are a
 
 Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
-## Contributor licence agreement
+## Licence of your contribution
 
-Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once. exposehub is licensed under the [Apache License 2.0](LICENSE), and the maintainer may also offer exposehub as a hosted service or under other licences; the CLA gives the maintainer the rights to do that with contributed code. You keep the copyright to your work.
-
-Signing takes one comment. When you open a pull request, the CLA bot asks you to sign; reply on the pull request with exactly:
-
-```
-I have read the CLA Document and I hereby sign the CLA
-```
-
-The signature covers all your later contributions. If your employer may own what you write, get their permission first (section 4 of the CLA). If the check stays red after signing, comment `recheck`.
+exposehub is licensed under the [Apache License 2.0](LICENSE). What you contribute comes in under the same licence, as its section 5 says; there is nothing to sign. You keep the copyright to your work. If your employer may own what you write, get their permission first.
 
 ## Layout
 
