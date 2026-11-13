@@ -93,10 +93,9 @@ class SingleSignOn extends Controller
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
         // What RequireSsoSignIn looks for: this session began at the provider.
+        // Signing in is not a confirmation, as it is not with a password: the
+        // admin area and the security page ask again.
         $request->session()->put('sso.signed_in', now()->getTimestamp());
-        if ($fresh) {
-            $request->session()->put('auth.password_confirmed_at', now()->getTimestamp());
-        }
 
         return app(LoginResponse::class)->toResponse($request);
     }

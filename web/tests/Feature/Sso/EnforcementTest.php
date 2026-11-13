@@ -199,6 +199,9 @@ class EnforcementTest extends TestCase
     {
         $this->signInThroughProvider();
         $user = User::query()->sole();
+        // Signing in is no confirmation, however recent: as with a password.
+        $this->assertNull(session('auth.password_confirmed_at'));
+        $this->get(route('security.edit'))->assertRedirect(route('password.confirm'));
         $this->travel(4)->hours();
 
         $this->get(route('password.confirm'))->assertOk()->assertSee('Confirm with Okta');

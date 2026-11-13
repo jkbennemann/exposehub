@@ -116,6 +116,7 @@ Other values worth knowing, all documented in the chart's `values.yaml`:
 | `networkPolicy.type` | `kubernetes` | `cilium`, or `none`; see below |
 | `web.allowedEmailDomains` | empty | Limit registration to these email domains |
 | `web.logRetentionDays` | `7` | How long request logs are kept |
+| `web.sso.issuer`, `web.sso.clientId`, `web.sso.domains`, `secrets.ssoClientSecret` | empty | Single sign-on over OpenID Connect: on once all four are set. Accounts of those email domains then sign in through the provider only. `web.sso.name`, `tokenDays` and `requireVerifiedEmail` are optional; [admin.md](../admin.md) explains them |
 | `web.demo.enabled` | `false` | Offers "Try the demo" on the landing page: visitors without an account, wiped every `web.demo.resetMinutes`. Read [admin.md](../admin.md) first; `server.demoMaxTunnels` and `server.demoRequestsPerMinute` limit its tunnels |
 | `server.additionalTunnelDomains` | `[]` | More domains tunnels can use; each needs its own wildcard record |
 | `web.sourceUrl` | upstream | Where the dashboard's source link points. Point it at your fork if you run a changed version, so people can see what the install runs. |

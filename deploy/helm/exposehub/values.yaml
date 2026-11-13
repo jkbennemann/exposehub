@@ -161,6 +161,25 @@ web:
   # How many days the dashboard keeps request logs.
   logRetentionDays: 7
 
+  # Single sign-on over OpenID Connect (Okta, Entra ID, Google Workspace,
+  # Keycloak, ...). On once issuer, clientId, secrets.ssoClientSecret and at
+  # least one domain are set. Accounts with an address of these domains then
+  # sign in through the provider only, and adminEmails keep their password.
+  # Register https://<host>/sso/callback as the redirect address there.
+  # docs/admin.md has the details.
+  sso:
+    # As the provider publishes it, e.g. https://example.okta.com
+    issuer: ""
+    clientId: ""
+    # Email domains the provider answers for, comma-separated.
+    domains: ""
+    # What the button says: "Sign in with Okta".
+    name: ""
+    # Days agent tokens work after the last sign-in through the provider; 0 for good.
+    tokenDays: 30
+    # false for a provider that does not say whether an address is confirmed.
+    requireVerifiedEmail: true
+
   # The demo: "Try the demo" on the landing page signs a visitor in without an
   # account, into a team with sample data, where they can open real tunnels.
   # All of it is deleted every resetMinutes. Demo tunnels are public addresses
@@ -342,6 +361,7 @@ networkPolicy:
 #   APP_KEY                  "base64:" + 32 random bytes (echo "base64:$(openssl rand -base64 32)")
 #   DB_PASSWORD              Postgres password (openssl rand -hex 24)
 #   MAIL_PASSWORD            optional, SMTP password
+#   EXPOSEHUB_SSO_CLIENT_SECRET  optional, the client secret for web.sso
 #   EXPOSEHUB_STATIC_TOKENS  optional, "account:token,..." accepted alongside
 #                            tokens created in the dashboard
 # The server only reads EXPOSEHUB_NODE_SECRET and EXPOSEHUB_STATIC_TOKENS from it.
@@ -352,4 +372,5 @@ secrets:
   appKey: ""
   dbPassword: ""
   mailPassword: ""
+  ssoClientSecret: ""
   staticTokens: ""

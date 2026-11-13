@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Single sign-on over OpenID Connect: Okta, Microsoft Entra ID, Google Workspace, Keycloak and others. With `EXPOSEHUB_SSO_ISSUER`, a client and the email domains of your organisation set, the login page offers "Sign in with …". Accounts of those domains are made at their first sign-in and sign in through the provider only; the platform owners keep their password. Their agent tokens work for `EXPOSEHUB_SSO_TOKEN_DAYS` (30) after the last sign-in through the provider, so that someone the provider no longer lets in loses their tunnels. Off by default; [docs/admin.md](docs/admin.md) has the setup.
+
 ## [0.2.0] - 2026-11-13
 
 ### Added

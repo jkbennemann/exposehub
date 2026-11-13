@@ -41,3 +41,41 @@ The limit per address counts an IPv6 /64 as one address, and it depends on the d
 The reset is one of the dashboard's scheduled jobs, so the scheduler has to run (it does in the Compose setup and the Helm chart). `php artisan demo:reset` wipes the demo at once.
 
 In the admin area, visitors are listed under People → Demo visitors, apart from people with an account, and their tunnels show on the Tunnels page like any other, where you can close one.
+
+## Single sign-on
+
+exposehub can sign people in through your identity provider over OpenID Connect: Okta, Microsoft Entra ID, Google Workspace, Keycloak and others. It is off until you set the issuer, a client and at least one email domain.
+
+### What it does
+
+- **The login page gets a button.** "Sign in with Okta", or whatever you name the provider.
+- **The provider answers for the email domains you name.** An account with such an address is made at the person's first sign-in through the provider. It needs no invitation and no password.
+- **Those accounts sign in through the provider only.** A password, a passkey or a remembered sign-in no longer gets them in: a session that did not begin at the provider is ended. Nobody can register an address of these domains or move an account to one.
+- **You keep a way in.** The addresses in `EXPOSEHUB_ADMIN_EMAILS` are exempt and keep password, two-factor and passkeys, so the people who run the install get in while the provider is down or set up wrongly. Make sure at least one of them has a password that works before you switch this on.
+- **Agent tokens need a recent sign-in.** A token lives on a laptop and outlives the browser session, so someone you have disabled at the provider would keep their tunnels. Tokens of an account the provider answers for work for `EXPOSEHUB_SSO_TOKEN_DAYS` (30) after its last sign-in through the provider. The person gets a mail three days before, and signing in to the dashboard is all it takes. Accounts that have not signed in through the provider yet get the same time, counted from when you switched single sign-on on.
+- **Where the dashboard asks for the password again** (the admin area, security settings), such an account is sent to the provider to sign in again. That needs a provider that says when the person last signed in (`auth_time`); Okta, Entra ID and Keycloak do.
+
+An existing account is tied to the person at their first sign-in if it has the same address and confirmed that address itself; the person gets a mail about it. From then on the account is found by the provider's own id for the person, not by the address, and follows the address if it changes at the provider.
+
+### Setting it up
+
+1. At the provider, create an OpenID Connect application of the "web application" kind (authorization code flow, with a client secret). Its redirect address is `https://<your dashboard>/sso/callback`; the admin area shows the exact address under Settings. It needs the scopes `openid`, `email` and `profile`.
+2. Set these for the dashboard and its scheduler:
+
+| Setting | What it is |
+|---|---|
+| `EXPOSEHUB_SSO_ISSUER` | The issuer as the provider publishes it, for example `https://example.okta.com`. It must match character for character, a trailing slash included |
+| `EXPOSEHUB_SSO_CLIENT_ID`, `EXPOSEHUB_SSO_CLIENT_SECRET` | The application's client id and secret |
+| `EXPOSEHUB_SSO_DOMAINS` | The email domains the provider answers for, comma-separated |
+| `EXPOSEHUB_SSO_NAME` | What the button calls the provider. Default: single sign-on |
+| `EXPOSEHUB_SSO_TOKEN_DAYS` | How many days tokens work after the last sign-in through the provider; `0` for good. Default `30` |
+| `EXPOSEHUB_SSO_REQUIRE_VERIFIED_EMAIL` | Whether the provider has to say that an address is confirmed (`email_verified`). Default `true`. Entra ID does not say it; set `false` there, and only for a provider where people cannot choose their own address |
+| `EXPOSEHUB_SSO_SCOPES` | Default `openid email profile` |
+
+With Okta: Applications → Create App Integration → OIDC, Web Application; grant type Authorization Code; sign-in redirect URI as above; assign the people or groups who may use exposehub. The issuer is your Okta domain, or the issuer of the authorization server you use.
+
+### What it does not do yet
+
+- **Disabling someone at the provider does not close their tunnels at once.** It closes them when their tokens' days run out. Suspend the account in the admin area to cut it off immediately; that takes effect within seconds.
+- **Teams are not filled from the provider's groups.** People join teams by invitation, as before.
+- **One provider per install,** and no SAML.

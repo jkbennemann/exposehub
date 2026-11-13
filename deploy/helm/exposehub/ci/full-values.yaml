@@ -15,6 +15,13 @@ server:
 web:
   host: dash.example.com
   sourceUrl: https://git.example.com/fork/exposehub
+  sso:
+    issuer: https://id.example.com
+    clientId: exposehub
+    domains: example.com,example.org
+    name: Okta
+    tokenDays: 14
+    requireVerifiedEmail: false
   demo:
     enabled: true
     resetMinutes: 15
