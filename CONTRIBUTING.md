@@ -6,7 +6,7 @@ Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
 ## Contributor licence agreement
 
-Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once. exposehub is source-available under the Functional Source License (FSL-1.1-ALv2), and the maintainer may offer exposehub as a hosted service or under other licences; the CLA gives the maintainer the rights to do that with contributed code. You keep the copyright to your work.
+Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once. exposehub is licensed under the [Apache License 2.0](LICENSE), and the maintainer may also offer exposehub as a hosted service or under other licences; the CLA gives the maintainer the rights to do that with contributed code. You keep the copyright to your work.
 
 Signing takes one comment. When you open a pull request, the CLA bot asks you to sign; reply on the pull request with exactly:
 

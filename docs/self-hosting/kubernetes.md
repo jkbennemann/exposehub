@@ -117,7 +117,7 @@ Other values worth knowing, all documented in the chart's `values.yaml`:
 | `web.allowedEmailDomains` | empty | Limit registration to these email domains |
 | `web.logRetentionDays` | `7` | How long request logs are kept |
 | `server.additionalTunnelDomains` | `[]` | More domains tunnels can use; each needs its own wildcard record |
-| `web.sourceUrl` | upstream | Where the dashboard's source link points. Set it if you run a modified version: the AGPL asks you to offer your users that source. |
+| `web.sourceUrl` | upstream | Where the dashboard's source link points. Point it at your fork if you run a changed version, so people can see what the install runs. |
 | `legal.imprint`, `legal.privacy` | empty | Markdown for `/imprint` and `/privacy`; templates are in `web/resources/legal` |
 
 ## Install

@@ -4,6 +4,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Licence
+
+- exposehub is now open source under the [Apache License 2.0](LICENSE). Version 0.1.0 stays under the Functional Source License it was published with.
+- The Helm chart named AGPL-3.0 as its licence on Artifact Hub; it names Apache-2.0 now.
+
 ### Changed
 
 - The dashboard's assets are built with vite-plus 1.5.0.
@@ -14,7 +19,7 @@ First public release.
 
 ### Licence
 
-- Source-available under the Functional Source License, [FSL-1.1-ALv2](LICENSE). Each release converts to Apache-2.0 two years after it is published.
+- Source-available under the Functional Source License, [FSL-1.1-ALv2](https://github.com/jkbennemann/exposehub/blob/v0.1.0/LICENSE.md). Each release converts to Apache-2.0 two years after it is published.
 - Contributions are accepted under a [Contributor License Agreement](CLA.md).
 
 ### Tunnel server and agent

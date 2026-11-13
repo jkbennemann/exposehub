@@ -118,8 +118,8 @@ web:
   adminEmails: ""
 
   # Where the dashboard's "Source" link points. Empty uses the image's
-  # default, the upstream repository. Set it when you run a modified version:
-  # the AGPL asks you to offer your users the source you run.
+  # default, the upstream repository. Point it at your fork when you run a
+  # changed version, so people can see what this install runs.
   sourceUrl: ""
 
   # "log" writes mail to the pod log instead of sending it. Set the SMTP

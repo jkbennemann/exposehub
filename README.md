@@ -8,7 +8,7 @@ exposehub puts a service running on your machine under a public HTTPS address, t
 
 ![A terminal runs exposehub http 3000, gets the address https://shop.example.eu, and lists each request that arrives](docs/demo/demo.gif)
 
-Status: 0.x. It runs a team's daily tunnels for HTTP and WebSocket traffic, but settings and APIs may still change between minor versions; [CHANGELOG.md](CHANGELOG.md) says what changed. exposehub is source-available under the [Functional Source License](LICENSE.md): free to run for yourself and your company, not to be sold as a service.
+Status: 0.x. It runs a team's daily tunnels for HTTP and WebSocket traffic, but settings and APIs may still change between minor versions; [CHANGELOG.md](CHANGELOG.md) says what changed. exposehub is open source under the [Apache License 2.0](LICENSE).
 
 ## Quick start
 
@@ -80,7 +80,7 @@ The end-to-end tests are in [`tunnel/internal/e2e`](tunnel/internal/e2e); `go te
 | Request inspector | local, with replay | local, with replay | no | no |
 | Certificates | automatic | managed | managed | yours to set up |
 | TCP, UDP, gRPC | no | yes | partly | yes |
-| Licence | FSL, source-available | proprietary | client Apache-2.0 | Apache-2.0 |
+| Licence | Apache-2.0 | proprietary | client Apache-2.0 | Apache-2.0 |
 | Made for | a team sharing dev servers and webhooks from its own infrastructure | sharing something quickly without running a server | services that sit behind Cloudflare anyway | any protocol, driven by configuration files |
 
 As of November 2026, from each project's documentation and issue tracker; corrections are welcome. If you need TCP, UDP or gRPC, or do not want to run a server, one of the others is the better choice.
@@ -167,10 +167,10 @@ Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, 
 
 ## Licence
 
-exposehub is licensed under the [Functional Source License, Version 1.1, ALv2 Future License](LICENSE.md) (FSL-1.1-ALv2), the licence Sentry uses. In short, and the licence text is what counts:
+exposehub is open source under the [Apache License, Version 2.0](LICENSE). In short, and the licence text is what counts:
 
-- You may use, change and self-host exposehub for any purpose except a competing one: for your company's own developers, for teaching and research, and as a consultant setting it up for a client who runs it.
-- You may not offer it to others as a commercial product or service that substitutes for exposehub or offers substantially the same functionality, such as selling hosted tunnels built on this code.
-- Two years after each release, that release is also available under the Apache License 2.0, without these limits.
+- You may use, change, self-host and pass on exposehub for any purpose, commercial ones included.
+- Copies you pass on keep the licence and the [NOTICE](NOTICE) file, and files you changed say so.
+- The licence gives no right to the name "exposehub" beyond saying where the software comes from (section 6).
 
-This makes exposehub source-available ("Fair Source"), not open source in the OSI sense. The name "exposehub" is not licensed for other products.
+Version 0.1.0 was published under the Functional Source License (FSL-1.1-ALv2); every version from 0.1.1 on is under Apache-2.0.

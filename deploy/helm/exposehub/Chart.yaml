@@ -14,4 +14,4 @@ keywords:
   - ngrok
   - self-hosted
 annotations:
-  artifacthub.io/license: AGPL-3.0
+  artifacthub.io/license: Apache-2.0
