@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-13
+
 ### Licence
 
 - exposehub is now open source under the [Apache License 2.0](LICENSE). Version 0.1.0 stays under the Functional Source License it was published with.
@@ -68,5 +70,6 @@ First public release.
 - The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
 - The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
 
-[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.0
