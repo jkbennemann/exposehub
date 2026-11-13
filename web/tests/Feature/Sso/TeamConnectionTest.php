@@ -161,6 +161,30 @@ class TeamConnectionTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_the_login_page_shows_one_way_in_at_a_time(): void
+    {
+        // Without a provider there is nothing to switch to, and one email field.
+        $this->get(route('login'))->assertOk()
+            ->assertSee('data-test="auth-panel"', false)
+            ->assertDontSee('data-test="sso-switch"', false)
+            ->assertDontSee('name="address"', false);
+
+        $this->approved();
+
+        // The page opens on the password. Single sign-on by address is a view of its own,
+        // hidden until someone asks for it.
+        $page = $this->get(route('login'))->assertOk()->assertSee('data-test="sso-switch"', false)->getContent();
+        $this->assertSame(1, substr_count($page, 'name="address"'));
+        $this->assertMatchesRegularExpression('/x-show="byAddress"\s+x-cloak/', $page);
+        $this->assertDoesNotMatchRegularExpression('/x-show="! byAddress"\s+x-cloak/', $page);
+
+        // Someone whose attempt by address failed comes back to that view and reads why there.
+        $page = $this->followingRedirects()->get(route('sso.redirect', ['address' => 'someone@unknown.example']))
+            ->assertOk()->assertSee('data-test="sso-error"', false)->getContent();
+        $this->assertMatchesRegularExpression('/x-show="! byAddress"\s+x-cloak/', $page);
+        $this->assertDoesNotMatchRegularExpression('/x-show="byAddress"\s+x-cloak/', $page);
+    }
+
     public function test_an_admin_approves_and_people_then_sign_in_by_their_address_and_join_the_team(): void
     {
         $this->enter();

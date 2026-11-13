@@ -3,14 +3,20 @@
     'submitRoute' => 'passkey.login',
     'label' => __('Sign in with a passkey'),
     'loadingLabel' => __('Authenticating...'),
+    // The line between the passkey and the other ways in; false for none.
     'separator' => __('Or continue with email'),
+    // Whether that line stands above the button (the passkey comes last) or below it.
+    'separatorAbove' => false,
 ])
 
 @assets
 @vite('resources/js/passkeys.js')
 @endassets
 
+{{-- Takes no room while the browser has no passkeys, so the page around it keeps its spacing. --}}
 <div
+    x-show="supported"
+    x-cloak
     x-data="{
         supported: false,
         loading: false,
@@ -46,6 +52,9 @@
 >
     <template x-if="supported">
         <div>
+            @if ($separator && $separatorAbove)
+                <flux:separator :text="$separator" class="mb-6" />
+            @endif
             <div class="grid gap-2">
                 <flux:button
                     variant="outline"
@@ -61,6 +70,7 @@
                    class="text-sm text-center text-red-600 dark:text-red-400"></p>
             </div>
 
+            @if ($separator && ! $separatorAbove)
             <div class="relative my-6">
                 <div class="absolute inset-0 flex items-center">
                     <div class="w-full border-t border-zinc-200 dark:border-zinc-700"></div>
@@ -71,6 +81,7 @@
                     </span>
                 </div>
             </div>
+            @endif
         </div>
     </template>
 </div>

@@ -23,6 +23,21 @@ class SingleSignOnTest extends TestCase
         $this->setUpSso();
     }
 
+    public function test_the_login_page_leads_with_the_installs_provider(): void
+    {
+        // The provider's button comes first; with no team's provider there is no view to switch to.
+        $page = $this->get(route('login'))->assertOk()
+            ->assertSee('data-test="sso-button"', false)
+            ->assertDontSee('data-test="sso-switch"', false)
+            ->assertDontSee('name="address"', false)
+            ->getContent();
+        $this->assertLessThan(strpos($page, 'data-test="login-button"'), strpos($page, 'data-test="sso-button"'));
+
+        // A failed sign-in is explained next to that button.
+        $this->followingRedirects()->get(route('sso.callback', ['state' => 'nobody-started-this', 'code' => 'x']))
+            ->assertOk()->assertSee('data-test="sso-button"', false)->assertSee('data-test="sso-error"', false);
+    }
+
     public function test_it_is_off_until_the_operator_sets_a_provider_up(): void
     {
         config(['exposehub.sso.issuer' => '']);

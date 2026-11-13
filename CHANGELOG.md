@@ -6,7 +6,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Changed
 
+- The login page shows one way in at a time. It opens on email and password, with the passkey and single sign-on below the form; single sign-on by work address has a view of its own instead of a second email field above the first. Where the install has its own provider, that button leads. The login, registration and password pages share a new layout with the form on the right and, on wide screens, a panel that shows what a tunnel does.
 - The self-hosting guides say what single sign-on needs from the network: the dashboard calls the provider itself on port 443, which hosts to open where outbound traffic is limited, what the log says when one is missing, and a command to check from inside the container.
+
+### Fixed
+
+- Chat apps and phones showed the Laravel logo as the site's icon: `favicon.ico` and `apple-touch-icon.png` were still the framework's files. Both are now the exposehub mark.
 
 ## [0.3.1] - 2026-11-13
 
