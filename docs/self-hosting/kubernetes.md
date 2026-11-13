@@ -125,7 +125,7 @@ Other values worth knowing, all documented in the chart's `values.yaml`:
 
 ```sh
 helm install exposehub oci://ghcr.io/jkbennemann/charts/exposehub \
-  --version 0.1.2 --namespace exposehub -f values.yaml
+  --version 0.2.0 --namespace exposehub -f values.yaml
 kubectl -n exposehub get certificate,pods
 ```
 
