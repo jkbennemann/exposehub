@@ -153,32 +153,52 @@ func (b *bucket) idle(now time.Time) time.Duration {
 // directions of a WebSocket. The request limit alone would not bound what a
 // demo tunnel relays, since one request can stream for hours.
 func (s *Server) meter(sess *session, w http.ResponseWriter, r *http.Request) http.ResponseWriter {
-	pace := func(n int) {
-		if n <= 0 {
-			return
-		}
-		wait := sess.limit.bytes.spend(n, time.Now())
-		// In steps, so that a tunnel that has closed lets go of its visitors.
-		for wait > 0 && !sess.mux.IsClosed() {
-			step := min(wait, 250*time.Millisecond)
-			time.Sleep(step)
-			wait -= step
-		}
-	}
+	p := &pacer{bytes: sess.limit.bytes, gone: r.Context().Done(), closed: sess.mux.CloseChan()}
 	if r.Body != nil && r.Body != http.NoBody {
-		r.Body = &meteredBody{ReadCloser: r.Body, pace: pace}
+		r.Body = &meteredBody{ReadCloser: r.Body, pacer: p}
 	}
-	return &meteredWriter{ResponseWriter: w, pace: pace}
+	return &meteredWriter{ResponseWriter: w, pacer: p}
+}
+
+// pacer makes whoever moved bytes wait until the tunnel's allowance has
+// caught up with them. It stops waiting when there is nobody left to hold
+// back: the visitor has gone, or the tunnel has closed. Without that, a
+// request would keep its place on the server, and its stream to the agent,
+// long after the browser that made it went away.
+type pacer struct {
+	bytes  *bucket
+	gone   <-chan struct{}
+	closed <-chan struct{}
+}
+
+// wait accounts for n bytes that have passed. done, if not nil, ends the
+// wait as well.
+func (p *pacer) wait(n int, done <-chan struct{}) {
+	if n <= 0 {
+		return
+	}
+	d := p.bytes.spend(n, time.Now())
+	if d <= 0 {
+		return
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-p.gone:
+	case <-p.closed:
+	case <-done:
+	}
 }
 
 type meteredBody struct {
 	io.ReadCloser
-	pace func(int)
+	pacer *pacer
 }
 
 func (b *meteredBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
-	b.pace(n)
+	b.pacer.wait(n, nil)
 	return n, err
 }
 
@@ -186,12 +206,12 @@ func (b *meteredBody) Read(p []byte) (int, error) {
 // Hijack hands out the connection of an upgraded request, paced as well.
 type meteredWriter struct {
 	http.ResponseWriter
-	pace func(int)
+	pacer *pacer
 }
 
 func (w *meteredWriter) Write(p []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(p)
-	w.pace(n)
+	w.pacer.wait(n, nil)
 	return n, err
 }
 
@@ -202,24 +222,33 @@ func (w *meteredWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return &meteredConn{Conn: conn, pace: w.pace}, rw, nil
+	// From here the request's context no longer says when the visitor
+	// leaves; the proxy closes the connection when either side is done.
+	return &meteredConn{Conn: conn, pacer: &pacer{bytes: w.pacer.bytes, closed: w.pacer.closed}, done: make(chan struct{})}, rw, nil
 }
 
 type meteredConn struct {
 	net.Conn
-	pace func(int)
+	pacer *pacer
+	done  chan struct{}
+	once  sync.Once
 }
 
 func (c *meteredConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
-	c.pace(n)
+	c.pacer.wait(n, c.done)
 	return n, err
 }
 
 func (c *meteredConn) Write(p []byte) (int, error) {
 	n, err := c.Conn.Write(p)
-	c.pace(n)
+	c.pacer.wait(n, c.done)
 	return n, err
+}
+
+func (c *meteredConn) Close() error {
+	c.once.Do(func() { close(c.done) })
+	return c.Conn.Close()
 }
 
 // admit reports whether a visitor's request may go on to the agent. When it
@@ -307,26 +336,54 @@ func (s *Server) writeDemoNotice(w http.ResponseWriter, r *http.Request, host, v
 	link := demoContinuePath + "?to=" + url.QueryEscape(to) +
 		"&sig=" + url.QueryEscape(s.demoToken("continue", host, visitor, now.Add(demoLinkFor)))
 	w.Header().Set("X-Robots-Tag", "noindex")
-	errorpage.Write(w, r, errorpage.DemoNotice(s.cfg.AgentHost, link))
+	page := errorpage.DemoNotice(s.cfg.AgentHost, link)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		// What was sent has not reached the service. A browser shows the
+		// notice whatever the status; a program must not take it for delivered.
+		page.Status = http.StatusForbidden
+	}
+	errorpage.Write(w, r, page)
 }
 
 // isNavigation reports whether a browser is loading r as a page, in a tab or
 // a frame. Browsers say so in Sec-Fetch-Mode, for a form sent with POST too.
 // One that does not send the header, as every browser does over plain HTTP
-// and older ones always, is taken to be navigating when it asks for HTML,
-// with whatever method: a form that another site posts here must not get
-// past the notice. Webhook senders and scripts do not ask for HTML.
+// and older ones always, is taken to be navigating when it asks for HTML:
+// with GET or HEAD, or with a POST that carries a form, which is what another
+// site can make a browser send here. Webhook senders and scripts either do
+// not ask for HTML or send something no form can.
 func isNavigation(r *http.Request) bool {
 	if mode := r.Header.Get("Sec-Fetch-Mode"); mode != "" {
 		return mode == "navigate"
 	}
-	if r.Header.Get("Upgrade") != "" {
+	if r.Header.Get("Upgrade") != "" || !asksForHTML(r) {
 		return false
 	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		return true
+	case http.MethodPost:
+		return isFormType(r.Header.Get("Content-Type"))
+	}
+	return false
+}
+
+func asksForHTML(r *http.Request) bool {
 	for _, v := range r.Header.Values("Accept") {
-		if strings.Contains(v, "text/html") {
+		if strings.Contains(strings.ToLower(v), "text/html") {
 			return true
 		}
+	}
+	return false
+}
+
+// isFormType reports whether contentType is one of the three an HTML form
+// can send.
+func isFormType(contentType string) bool {
+	kind, _, _ := strings.Cut(contentType, ";")
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "application/x-www-form-urlencoded", "multipart/form-data", "text/plain":
+		return true
 	}
 	return false
 }

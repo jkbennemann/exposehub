@@ -109,18 +109,21 @@ func TestWhatCountsAsOpeningAPage(t *testing.T) {
 		r    *http.Request
 		want bool
 	}{
-		"a tab":                          {req("GET", "Sec-Fetch-Mode", "navigate", "Accept", "text/html"), true},
-		"a form sent to the tunnel":      {req("POST", "Sec-Fetch-Mode", "navigate"), true},
-		"a page's fetch":                 {req("GET", "Sec-Fetch-Mode", "cors", "Accept", "text/html"), false},
-		"an image":                       {req("GET", "Sec-Fetch-Mode", "no-cors", "Accept", "image/*"), false},
-		"a WebSocket":                    {req("GET", "Sec-Fetch-Mode", "websocket", "Upgrade", "websocket"), false},
-		"a browser without the header":   {req("GET", "Accept", "text/html,application/xhtml+xml"), true},
-		"its HEAD":                       {req("HEAD", "Accept", "text/html"), true},
-		"its form, posted from any site": {req("POST", "Accept", "text/html,application/xhtml+xml", "Content-Type", "application/x-www-form-urlencoded"), true},
-		"a webhook sending a form":       {req("POST", "Accept", "*/*", "Content-Type", "application/x-www-form-urlencoded"), false},
-		"its WebSocket":                  {req("GET", "Accept", "text/html", "Upgrade", "websocket"), false},
-		"curl":                           {req("GET", "Accept", "*/*"), false},
-		"a webhook":                      {req("POST", "Content-Type", "application/json"), false},
+		"a tab":                                {req("GET", "Sec-Fetch-Mode", "navigate", "Accept", "text/html"), true},
+		"a form sent to the tunnel":            {req("POST", "Sec-Fetch-Mode", "navigate"), true},
+		"a page's fetch":                       {req("GET", "Sec-Fetch-Mode", "cors", "Accept", "text/html"), false},
+		"an image":                             {req("GET", "Sec-Fetch-Mode", "no-cors", "Accept", "image/*"), false},
+		"a WebSocket":                          {req("GET", "Sec-Fetch-Mode", "websocket", "Upgrade", "websocket"), false},
+		"a browser without the header":         {req("GET", "Accept", "text/html,application/xhtml+xml"), true},
+		"its HEAD":                             {req("HEAD", "Accept", "text/html"), true},
+		"its form, posted from any site":       {req("POST", "Accept", "text/html,application/xhtml+xml", "Content-Type", "application/x-www-form-urlencoded"), true},
+		"a webhook sending a form":             {req("POST", "Accept", "*/*", "Content-Type", "application/x-www-form-urlencoded"), false},
+		"a program that names HTML by default": {req("POST", "Accept", "text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2", "Content-Type", "application/json"), false},
+		"its PUT":                              {req("PUT", "Accept", "text/html", "Content-Type", "application/x-www-form-urlencoded"), false},
+		"a form with a charset":                {req("POST", "Accept", "TEXT/HTML", "Content-Type", "Multipart/Form-Data; boundary=x"), true},
+		"its WebSocket":                        {req("GET", "Accept", "text/html", "Upgrade", "websocket"), false},
+		"curl":                                 {req("GET", "Accept", "*/*"), false},
+		"a webhook":                            {req("POST", "Content-Type", "application/json"), false},
 	} {
 		if got := isNavigation(c.r); got != c.want {
 			t.Errorf("%s: navigation %v, want %v", name, got, c.want)
