@@ -8,12 +8,14 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -271,11 +273,46 @@ func (s *Server) serveAgentHost(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case proto.AgentPath:
 		s.serveAgent(w, r)
+	case proto.AddressesPath:
+		s.serveAddresses(w, r)
 	case "/healthz":
 		fmt.Fprintln(w, "ok")
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// serveAddresses tells an agent which addresses its token may ask for: the
+// server's tunnel domains, and the domains its team has verified. It reveals
+// nothing a session with the same token could not find out by trying.
+func (s *Server) serveAddresses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	principal, err := s.auth.Authenticate(r.Context(), token)
+	if err != nil {
+		if !errors.Is(err, ErrUnauthorized) {
+			w.Header().Set("Retry-After", "30")
+			http.Error(w, "exposehub: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		http.Error(w, "exposehub: invalid agent token", http.StatusUnauthorized)
+		return
+	}
+	out := proto.Addresses{TunnelDomains: slices.Clone(s.cfg.TunnelDomains), OwnDomains: []string{}}
+	// Demo tunnels take random names only (demo.go), never a domain of a team.
+	if lister, ok := s.auth.(DomainLister); ok && !principal.Demo {
+		if own := lister.DomainsOf(principal.Account); own != nil {
+			out.OwnDomains = own
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // serveAgent runs one agent session. It returns when the session ends.

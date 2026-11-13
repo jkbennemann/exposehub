@@ -41,6 +41,9 @@ type tunnelOptions struct {
 	LogBodies  bool
 	NoLog      bool
 	HostHeader string
+	// BaseDir is where a relative folder target starts from: the project
+	// file's folder for exposehub.yml, the current directory otherwise.
+	BaseDir string
 }
 
 // runOptions are the settings of the agent as a whole.
@@ -49,6 +52,9 @@ type runOptions struct {
 	Token   string
 	Inspect string
 	Verbose bool
+	// JSON prints one JSON object per line instead of text, for programs
+	// and coding agents that read the output.
+	JSON bool
 }
 
 // splitTarget reads "shop=8000" as the name shop and the target 8000. A
@@ -112,8 +118,15 @@ func buildHTTPTunnels(targets []string, shared tunnelOptions) ([]agent.Tunnel, e
 
 // makeTunnel checks one tunnel's options and builds it.
 func makeTunnel(name, target string, o tunnelOptions) (agent.Tunnel, error) {
-	upstream, err := agent.ParseUpstream(target)
-	if err != nil {
+	// A folder gets its address when the agent starts serving it.
+	var upstream *url.URL
+	var folder string
+	var err error
+	if isFolderTarget(target) {
+		if folder, err = resolveFolder(target, o.BaseDir); err != nil {
+			return agent.Tunnel{}, fmt.Errorf("%s: %w", name, err)
+		}
+	} else if upstream, err = agent.ParseUpstream(target); err != nil {
 		return agent.Tunnel{}, fmt.Errorf("%s: %w", name, err)
 	}
 	if o.HostHeader == "" {
@@ -143,6 +156,7 @@ func makeTunnel(name, target string, o tunnelOptions) (agent.Tunnel, error) {
 	return agent.Tunnel{
 		Name: name, Upstream: upstream, Domain: o.Domain, Subdomain: o.Subdomain, Hostname: o.Hostname,
 		HostHeader: o.HostHeader, Auth: o.Auth, Allow: o.Allow, LogBodies: o.LogBodies, NoLog: o.NoLog,
+		Folder: folder,
 	}, nil
 }
 
@@ -228,6 +242,7 @@ func loadProject(path string, only []string, lookup func(string) (string, bool))
 		opts := tunnelOptions{
 			Subdomain: pt.Subdomain, Hostname: pt.Hostname, Domain: pt.Domain,
 			Auth: pt.Auth, Allow: pt.Allow, HostHeader: pt.HostHeader,
+			BaseDir: filepath.Dir(path),
 		}
 		switch pt.Log {
 		case "", "requests":
@@ -299,7 +314,11 @@ func expandNode(node *yaml.Node, lookup func(string) (string, bool)) error {
 // confirm a restriction that was asked for.
 func runTunnels(o runOptions, tunnels []agent.Tunnel) error {
 	if o.Server == "" || o.Token == "" {
-		return errors.New("not logged in; run: exposehub login")
+		return errNotLoggedIn
+	}
+	var out *jsonWriter
+	if o.JSON {
+		out = newJSONWriter(os.Stdout)
 	}
 	level := slog.LevelWarn
 	if o.Verbose {
@@ -310,14 +329,30 @@ func runTunnels(o runOptions, tunnels []agent.Tunnel) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 
+	// Folders are served on a port of this machine for as long as the agent runs.
+	for i, t := range tunnels {
+		if t.Folder == "" {
+			continue
+		}
+		u, err := serveFolder(ctx, t.Folder)
+		if err != nil {
+			return fmt.Errorf("%s: cannot serve %s: %w", t.Name, t.Folder, err)
+		}
+		tunnels[i].Upstream = u
+	}
+
 	var store *inspector.Store
+	inspectorURL := ""
 	if o.Inspect != "off" && o.Inspect != "false" {
 		store = inspector.NewStore()
 		addr, err := serveInspector(ctx, store, o.Inspect, o.Inspect == "127.0.0.1:4040")
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Inspector   http://%s\n", addr)
+		inspectorURL = "http://" + addr
+		if out == nil {
+			fmt.Printf("Inspector   %s\n", inspectorURL)
+		}
 	}
 
 	byName := map[string]agent.Tunnel{}
@@ -345,6 +380,26 @@ func runTunnels(o runOptions, tunnels []agent.Tunnel) error {
 		Logger:    slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})),
 		Tunnels:   tunnels,
 		OnConnect: func(infos []proto.TunnelInfo) {
+			if out != nil {
+				ready := readyEvent{Event: "ready", Inspector: inspectorURL, Tunnels: []tunnelJSON{}}
+				for _, info := range infos {
+					t := byName[info.Name]
+					if len(t.Allow) > 0 && info.Access == "" {
+						cancel(fmt.Errorf("the server did not confirm the limit on who may reach %s (it may be an older version); stopped so the tunnel is not open to everyone", info.URL))
+						return
+					}
+					ready.Tunnels = append(ready.Tunnels, describeTunnel(info, t))
+				}
+				out.write(ready)
+				if !probed {
+					probed = true
+					for _, t := range waitingFor(ctx, tunnels) {
+						out.write(messageEvent{Event: "waiting", Name: t.Name, Target: targetString(t),
+							Message: "nothing answers at " + targetString(t) + " yet; visitors see an error page until it does"})
+					}
+				}
+				return
+			}
 			for _, info := range infos {
 				t := byName[info.Name]
 				label := labelOf(info.Name)
@@ -352,7 +407,11 @@ func runTunnels(o runOptions, tunnels []agent.Tunnel) error {
 				if info.Protected {
 					protection = "  (password protected)"
 				}
-				fmt.Printf("Forwarding  %s%s  ->  %s%s\n", label, info.URL, upstreamString(t.Upstream), protection)
+				target := targetString(t)
+				if t.Folder != "" {
+					target += " (folder)"
+				}
+				fmt.Printf("Forwarding  %s%s  ->  %s%s\n", label, info.URL, target, protection)
 				if len(t.Allow) > 0 && info.Access == "" {
 					cancel(fmt.Errorf("the server did not confirm the limit on who may reach %s (it may be an older version); stopped so the tunnel is not open to everyone", info.URL))
 					return
@@ -388,12 +447,24 @@ func runTunnels(o runOptions, tunnels []agent.Tunnel) error {
 			}
 		},
 		OnNotice: func(tunnel, text string) {
+			if out != nil {
+				out.write(messageEvent{Event: "notice", Name: tunnel, Message: text})
+				return
+			}
 			fmt.Printf("Note        %s%s\n", labelOf(tunnel), text)
 		},
 		OnNewerAgent: func(offered string) {
+			if out != nil {
+				out.write(updateEvent{Event: "update_available", Version: offered, Current: version})
+				return
+			}
 			fmt.Fprintf(os.Stderr, "The server offers agent %s (this is %s). Update with: exposehub update\n", offered, version)
 		},
 		OnRequest: func(r agent.Request) {
+			if out != nil {
+				out.write(newRequestEvent(r, time.Now()))
+				return
+			}
 			replay := ""
 			if r.Replay {
 				replay = "  (replay)"
@@ -412,19 +483,29 @@ func runTunnels(o runOptions, tunnels []agent.Tunnel) error {
 // connection yet, in the order of tunnels. The tunnel stays open either way:
 // people start it before their service as often as after.
 func notRunning(ctx context.Context, tunnels []agent.Tunnel, label func(string) string) []string {
+	var lines []string
+	for _, t := range waitingFor(ctx, tunnels) {
+		lines = append(lines, fmt.Sprintf("Waiting     %snothing answers at %s yet; visitors see an error page until it does", label(t.Name), targetString(t)))
+	}
+	return lines
+}
+
+// waitingFor returns the tunnels whose local service accepts no connection
+// yet, in the order of tunnels.
+func waitingFor(ctx context.Context, tunnels []agent.Tunnel) []agent.Tunnel {
 	down := make([]bool, len(tunnels))
 	var wg sync.WaitGroup
 	for i, t := range tunnels {
 		wg.Go(func() { down[i] = agent.Reachable(ctx, t.Upstream) != nil })
 	}
 	wg.Wait()
-	var lines []string
+	var waiting []agent.Tunnel
 	for i, t := range tunnels {
 		if down[i] {
-			lines = append(lines, fmt.Sprintf("Waiting     %snothing answers at %s yet; visitors see an error page until it does", label(t.Name), upstreamString(t.Upstream)))
+			waiting = append(waiting, t)
 		}
 	}
-	return lines
+	return waiting
 }
 
 func upstreamString(u *url.URL) string {

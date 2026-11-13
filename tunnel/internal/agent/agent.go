@@ -79,6 +79,10 @@ type Tunnel struct {
 	// Unless it is HostPreserve, a Next.js dev server on a loopback upstream
 	// that refuses the tunnel's origin gets its own on its dev endpoints.
 	HostHeader string
+	// Folder is the local folder the command serves at Upstream, for a
+	// target such as ./dist. Run does not read it; it is there so that what
+	// the person sees can name the folder rather than a local port.
+	Folder string
 }
 
 // Request describes one proxied request, for display.

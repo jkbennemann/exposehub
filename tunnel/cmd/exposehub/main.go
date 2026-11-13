@@ -36,9 +36,13 @@ var defaultServer = ""
 const usage = `Usage:
   exposehub login                    save your agent token
   exposehub http TARGET... [flags]   open a tunnel to each target: a port,
-                                     host[:port] or URL; NAME=TARGET asks
-                                     for that subdomain (shop=8000 api=3000)
+                                     host[:port], URL or folder (./dist);
+                                     NAME=TARGET asks for that subdomain
+                                     (shop=8000 api=3000)
   exposehub start [NAME...] [flags]  open the tunnels of exposehub.yml
+  exposehub mcp [--root DIR]         run as an MCP server for coding agents;
+                                     it serves folders inside DIR only
+                                     (default: the directory it starts in)
   exposehub logout                   forget the saved token
   exposehub server [URL]             show or change the tunnel server
   exposehub update                   install the agent version the server offers
@@ -60,9 +64,14 @@ Flags for http (they apply to every target):
                         127.0.0.1:4040), or "off"
   --server URL          another tunnel server than the saved one (or EXPOSEHUB_SERVER)
   --token TOKEN         another token than the saved one (or EXPOSEHUB_TOKEN)
+  --json                print one JSON object per line, for programs and agents
   --verbose             log connection details
 
-Flags for start: --file PATH, --inspect, --server, --token, --verbose.
+A folder target (./dist, ../site/build or an absolute path) is served by the
+agent itself: read only, no folder listings, and nothing whose name starts
+with a dot (.env, .git).
+
+Flags for start: --file PATH, --inspect, --json, --server, --token, --verbose.
 
 exposehub.yml, found in the current directory or a parent:
   tunnels:
@@ -93,11 +102,16 @@ func main() {
 		os.Exit(2)
 	}
 	var err error
+	asJSON := false
 	switch os.Args[1] {
 	case "http":
+		asJSON = wantsJSON(os.Args[2:])
 		err = runHTTP(os.Args[2:])
 	case "start":
+		asJSON = wantsJSON(os.Args[2:])
 		err = runStart(os.Args[2:])
+	case "mcp":
+		err = runMCP(os.Args[2:])
 	case "login":
 		err = runLogin(os.Args[2:])
 	case "logout":
@@ -115,6 +129,9 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
+		if asJSON {
+			newJSONWriter(os.Stdout).write(newErrorEvent(err))
+		}
 		fmt.Fprintln(os.Stderr, "exposehub:", err)
 		os.Exit(1)
 	}
@@ -141,6 +158,7 @@ func runHTTP(args []string) error {
 	logBodies := fs.Bool("log-bodies", false, "")
 	noLog := fs.Bool("no-log", false, "")
 	verbose := fs.Bool("verbose", false, "")
+	asJSON := fs.Bool("json", false, "")
 
 	// The flag package stops at the first positional argument, but people
 	// write "http 8000 --subdomain x", so parse around the positionals.
@@ -161,7 +179,7 @@ func runHTTP(args []string) error {
 	if err != nil {
 		return err
 	}
-	return runTunnels(runOptions{Server: *server, Token: *token, Inspect: *inspect, Verbose: *verbose}, tunnels)
+	return runTunnels(runOptions{Server: *server, Token: *token, Inspect: *inspect, Verbose: *verbose, JSON: *asJSON}, tunnels)
 }
 
 // runStart opens the tunnels of the project file, all of them or the ones named.
@@ -177,6 +195,7 @@ func runStart(args []string) error {
 	file := fs.String("file", "", "")
 	inspect := fs.String("inspect", "127.0.0.1:4040", "")
 	verbose := fs.Bool("verbose", false, "")
+	asJSON := fs.Bool("json", false, "")
 	var names []string
 	for len(args) > 0 {
 		if err := fs.Parse(args); err != nil {
@@ -201,8 +220,10 @@ func runStart(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Project     %s\n", path)
-	return runTunnels(runOptions{Server: *server, Token: *token, Inspect: *inspect, Verbose: *verbose}, tunnels)
+	if !*asJSON {
+		fmt.Printf("Project     %s\n", path)
+	}
+	return runTunnels(runOptions{Server: *server, Token: *token, Inspect: *inspect, Verbose: *verbose, JSON: *asJSON}, tunnels)
 }
 
 func firstNonEmpty(values ...string) string {

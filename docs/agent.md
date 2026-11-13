@@ -16,8 +16,9 @@ On Windows, download `https://connect.example.eu/agent/exposehub-windows-amd64.e
 
 ```
 exposehub login
-exposehub http TARGET... [--subdomain NAME] [--hostname HOST] [--auth USER:PASSWORD] [--allow ADDR|NETWORK] [--log-bodies | --no-log]
-exposehub start [NAME...]
+exposehub http TARGET... [--subdomain NAME] [--hostname HOST] [--auth USER:PASSWORD] [--allow ADDR|NETWORK] [--log-bodies | --no-log] [--json]
+exposehub start [NAME...] [--json]
+exposehub mcp
 exposehub logout
 exposehub update
 exposehub server [URL]
@@ -52,6 +53,65 @@ tunnels:
 ```
 
 Unknown keys are errors, so a typo does not silently open a tunnel without its password. A file found in a parent directory is used only if no other account could have written it (on Linux and macOS: it and its directory belong to you or root, and neither is writable by everyone, except a sticky directory such as `/tmp`); otherwise `start` stops and names it, and `--file` loads it if you trust it.
+
+## Serving a folder
+
+A target that starts with `./`, `../` or `~/`, or is an absolute path, is a folder the agent serves itself: `exposehub http ./dist --subdomain preview`. In a project file, a relative folder starts at the file's own folder. The folder is served read only, for `GET` and `HEAD`:
+
+- Nothing whose name starts with a dot is served (`.env`, `.git`), except `.well-known`.
+- A folder without `index.html` is not listed; it answers 404.
+- Neither `../` nor a symbolic link leads out of the folder.
+- The agent refuses hidden folders, and in the home folder anything inside one (`~/.ssh/keys`), the home folder and every folder above it, the system's own folders (`/etc`, `~/Library` and the like) and folders that hold one (`/var`, `/private`).
+- The agent serves the folder on a port of its own machine under a random path that only the tunnel knows, so the folder cannot be read there past the tunnel's password or network limits.
+
+The folder is online while the agent runs, like any other tunnel. A bare name such as `dist` still means a host, as before.
+
+## Coding agents
+
+Every dashboard publishes instructions for coding agents at `/agents.md`, with its own addresses filled in: how to install the agent, how to read its output, and the rules to follow (open only what the person asked for, a password for anything private, never ask for the token). People hand an agent one sentence that points there; the dashboard's Overview offers it to copy. The person logs in with `exposehub login` first, so the agent uses the saved token and never sees it.
+
+### JSON output
+
+`exposehub http ... --json` and `exposehub start --json` print one JSON object per line on stdout instead of text. Each has an `event`:
+
+| event | when | fields |
+|---|---|---|
+| `ready` | after every (re)connect | `tunnels` (each with `name`, `url`, `target`, `folder`, `protected`, `access`, `logging`), `inspector` |
+| `waiting` | nothing answers locally yet | `name`, `target`, `message` |
+| `notice` | something to pass on, such as a dev server switched to its own host name | `name`, `message` |
+| `request` | after each request | `time`, `name`, `method`, `path`, `status`, `duration_ms`, `replay` |
+| `update_available` | the server offers another agent version | `version`, `current` |
+| `error` | the agent stops; always the last line | `code` (`not_logged_in` or `error`), `message` |
+
+Fields are only ever added. Logs still go to stderr.
+
+### MCP server
+
+`exposehub mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout. It uses the saved server and token (or `--server`, `--token`, `EXPOSEHUB_SERVER`, `EXPOSEHUB_TOKEN`) and offers these tools:
+
+| tool | does |
+|---|---|
+| `open_tunnel` | opens a tunnel to a port, host, URL or folder; optional `subdomain`, `hostname` (a domain the team verified), `domain`, `auth`, `allow`, `log` |
+| `close_tunnel` | closes one, by name or address |
+| `list_tunnels` | the open tunnels, with addresses, targets and request counts |
+| `list_addresses` | the server's tunnel domains and the team's own verified domains |
+| `recent_requests` | the latest requests a tunnel received (method, path, status, duration) |
+
+Each tunnel is its own session, up to ten at once, and all close when the client ends the process. Relative folders start at the directory the client starts the server in, usually the project's, and `open_tunnel` serves only folders inside it, not the project folder itself: a model can be talked into a tool call, so through MCP only a build folder such as `./dist` is published. Clients configured with JSON sometimes start servers in `/` or the home folder; there no folder counts as the project, and folder targets are off until `--root` names it: `"args": ["mcp", "--root", "/path/to/project"]`. `recent_requests` shortens paths to 200 characters and tells the model that they are visitor text, not instructions; `--json` shortens them too. To add it to Claude Code:
+
+```sh
+claude mcp add exposehub -- exposehub mcp
+```
+
+Clients configured with JSON take:
+
+```json
+{ "mcpServers": { "exposehub": { "command": "exposehub", "args": ["mcp"] } } }
+```
+
+Use the full path that `command -v exposehub` prints if the client does not find the command. A client should ask before it calls `open_tunnel`: a tunnel makes a local service public, and a model can be talked into calling a tool by text it reads elsewhere.
+
+`list_addresses` asks the tunnel server's `/_exposehub/addresses` endpoint, new in 0.4. The endpoint takes the agent token and answers with the server's tunnel domains and the domains the token's team has verified. Demo tokens get no domains.
 
 ## Limiting tunnels to networks
 

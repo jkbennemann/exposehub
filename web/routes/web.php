@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AgentGuide;
 use App\Http\Controllers\EnterDemo;
 use App\Http\Controllers\SingleSignOn;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -8,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 Route::view('docs', 'docs')->name('docs');
+// For coding agents: how to put a port or folder online with this install.
+Route::get('agents.md', AgentGuide::class)->name('agents');
 
 // The demo: one click signs a visitor in without an account. 404 while EXPOSEHUB_DEMO is off.
 Route::post('demo', EnterDemo::class)->middleware(['guest', 'throttle:20,1'])->name('demo.enter');

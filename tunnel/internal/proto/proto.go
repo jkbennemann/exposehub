@@ -26,6 +26,10 @@ const (
 	// AgentPath is the path of the WebSocket endpoint agents connect to.
 	AgentPath = "/_exposehub/agent"
 
+	// AddressesPath answers, for an agent token, which addresses its tunnels
+	// may ask for (Addresses). Servers before 0.4 answer it with 404.
+	AddressesPath = "/_exposehub/addresses"
+
 	// ProtoHTTP is the only tunnel protocol so far.
 	ProtoHTTP = "http"
 
@@ -76,6 +80,14 @@ type Welcome struct {
 	// AgentVersion is the agent version this server hands out for download.
 	// An agent with a different version can offer to update itself.
 	AgentVersion string `json:"agent_version,omitempty"`
+}
+
+// Addresses is what AddressesPath answers: the tunnel domains a tunnel can
+// take a subdomain of, and the domains the token's team has verified, which a
+// tunnel can take as a whole with TunnelRequest.Hostname.
+type Addresses struct {
+	TunnelDomains []string `json:"tunnel_domains"`
+	OwnDomains    []string `json:"own_domains"`
 }
 
 // TunnelInfo describes a tunnel the server has opened.

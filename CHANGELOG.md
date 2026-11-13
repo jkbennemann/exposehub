@@ -4,6 +4,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Coding agents. Every dashboard publishes instructions for agents at `/agents.md`, with its own addresses; the Overview and the docs offer one sentence to hand to Claude Code, Cursor, Codex and others. The agent asks the person to run `exposehub login` and never handles the token.
+- `exposehub mcp`: the agent as an MCP server on stdin and stdout, with the tools `open_tunnel`, `close_tunnel`, `list_tunnels`, `list_addresses` and `recent_requests`. `open_tunnel` takes a subdomain or a domain the team has verified, passwords and network limits.
+- `--json` for `exposehub http` and `exposehub start`: one JSON object per line (`ready`, `request`, `waiting`, `notice`, `update_available`, `error`).
+- Folders as targets: `exposehub http ./dist` serves a folder read only, without listings and without files whose names start with a dot. Hidden folders, the home folder and every folder above it, and the system's own folders are refused; through MCP, only folders inside the project are served.
+- The tunnel server answers `/_exposehub/addresses` on its agent host: for an agent token, its tunnel domains and the domains the token's team has verified. Agents before 0.4 do not use it; servers before 0.4 answer 404, which the agent reports.
+
 ## [0.3.2] - 2026-11-13
 
 ### Changed

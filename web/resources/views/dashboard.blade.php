@@ -3,6 +3,9 @@
     $tokens = $team->agentTokens()->usable()->where('user_id', auth()->id())->count();
     $install = 'curl -fsSL '.config('exposehub.agent_server').'/install.sh | sh';
     $login = 'exposehub login';
+    // One sentence for a coding agent: the guide at /agents.md does the rest.
+    $agentPrompt = __('Read :url, install the exposehub agent if it is missing, then give my local site a public address.', ['url' => route('agents')]);
+    $mcp = 'claude mcp add exposehub -- exposehub mcp';
 @endphp
 <x-layouts::app :title="__('Overview')">
     <livewire:pages::teams.pending-invitations-modal />
@@ -84,5 +87,21 @@
                 </div>
             </li>
         </ol>
+
+        {{-- The same steps, left to a coding agent. --}}
+        <section class="mt-14 max-w-3xl border-t border-zinc-200 pt-10 dark:border-zinc-700" aria-labelledby="overview-agents" data-test="overview-agents">
+            <h2 id="overview-agents" class="font-display text-2xl font-semibold">{{ __('Or let your coding agent do it') }}</h2>
+            <p class="mt-2 max-w-[62ch] text-zinc-600 dark:text-zinc-300">
+                {{ __('Paste this into Claude Code, Cursor, Codex or another agent. It reads the instructions this server publishes for agents, installs the agent and tells you the address. Log in yourself first, as in step 2: the agent never needs your token.') }}
+            </p>
+            <x-command class="mt-4" :command="$agentPrompt" />
+            <p class="mt-6 max-w-[62ch] text-zinc-600 dark:text-zinc-300">
+                {{ __('Agents that speak MCP can open, list and close tunnels as tools, and use your team\'s own domains. In Claude Code:') }}
+            </p>
+            <x-command class="mt-3" :command="$mcp" />
+            <p class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+                <a href="{{ route('docs') }}#agents" class="underline underline-offset-4 hover:text-zinc-900 dark:hover:text-white">{{ __('Other clients and what the tools do') }}</a>
+            </p>
+        </section>
     </div>
 </x-layouts::app>

@@ -41,6 +41,12 @@ type DomainAuthority interface {
 	DomainOwner(hostname string) (account string, ok bool)
 }
 
+// DomainLister lists the domains an account has verified. A DomainAuthority
+// may implement it; without one, an agent learns of no domains of its own.
+type DomainLister interface {
+	DomainsOf(account string) []string
+}
+
 // Authenticators asks several authenticators in order; the first that knows
 // the token wins.
 type Authenticators []Authenticator
@@ -69,6 +75,17 @@ func (as Authenticators) DomainOwner(hostname string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// DomainsOf implements DomainLister by asking the members that are one.
+func (as Authenticators) DomainsOf(account string) []string {
+	var all []string
+	for _, a := range as {
+		if l, ok := a.(DomainLister); ok {
+			all = append(all, l.DomainsOf(account)...)
+		}
+	}
+	return all
 }
 
 // StaticTokens is an Authenticator backed by a fixed list, for installs that

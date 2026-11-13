@@ -19,6 +19,7 @@
         'password' => __('Password protection'),
         'networks' => __('Limit to networks'),
         'domains' => __('Your own domain'),
+        'agents' => __('Coding agents'),
         'teams' => __('Teams and tokens'),
         'reference' => __('Commands and flags'),
         'trouble' => __('When something is off'),
@@ -242,6 +243,22 @@
                                 <p>{{ __('The certificate is issued within about a minute of connecting the domain. Until then, browsers show a certificate warning.') }}</p>
                             </li>
                         </ol>
+                    </section>
+
+                    <section id="agents">
+                        <h2>{{ __('Coding agents') }}</h2>
+                        <p>{!! __('Claude Code, Cursor, Codex and other coding agents can open tunnels for you. Log in yourself first with :login; the agent then uses the saved token and never needs to see it. Hand the agent one sentence:', ['login' => '<code>exposehub login</code>']) !!}</p>
+                        <x-command :command="__('Read :url, install the exposehub agent if it is missing, then give my local site a public address.', ['url' => route('agents')])" />
+                        <p>{!! __(':guide holds this server\'s own instructions for agents, in Markdown: how to install the agent, how to read its output, and the rules it has to follow (only open what you asked for, a password for anything private, never ask for your token).', ['guide' => '<a href="'.e(route('agents')).'">'.e(route('agents')).'</a>']) !!}</p>
+                        <h3>{{ __('As an MCP server') }}</h3>
+                        <p>{!! __(':command runs the agent as an MCP server. Its tools open a tunnel to a port, address or folder (with a subdomain, one of your team\'s own domains, a password or network limits), list and close the open ones, list which addresses your team may use, and show the latest requests a tunnel received. Tunnels stay open while the agent\'s client runs it. In Claude Code:', ['command' => '<code>exposehub mcp</code>']) !!}</p>
+                        <x-command command="claude mcp add exposehub -- exposehub mcp" />
+                        <p>{!! __('Clients configured with JSON (Cursor, Claude Desktop and others) take :json. Give the full path that :which prints if the client does not find the command. The agent serves folders only inside the project it runs in; a client that starts it elsewhere needs :root.', ['root' => '<code>--root /path/to/project</code>', 'json' => '<code>{"command": "exposehub", "args": ["mcp"]}</code>', 'which' => '<code>command -v exposehub</code>']) !!}</p>
+                        <h3>{{ __('From scripts') }}</h3>
+                        <p>{!! __(':flag prints one JSON object per line instead of text. The first line whose event is ready holds the addresses; an error line is the last before the agent stops.', ['flag' => '<code>exposehub http 3000 --json</code>']) !!}</p>
+                        <h3>{{ __('A folder instead of a port') }}</h3>
+                        <p>{!! __('A target such as :dist is served by the agent itself, read only: no folder listings, and nothing whose name starts with a dot, such as .env or .git. The agent refuses hidden folders such as ~/.ssh, your home folder and every folder above it, and the system\'s own folders. It is online while the agent runs.', ['dist' => '<code>./dist</code>']) !!}</p>
+                        <x-command command="exposehub http ./dist --subdomain preview" />
                     </section>
 
                     <section id="teams">

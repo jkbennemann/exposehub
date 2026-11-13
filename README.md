@@ -37,6 +37,7 @@ No server yet? [Try it locally](#try-it-locally) runs server, agent and a test s
 - **Addresses that stay.** Pick a subdomain, save it for your team, or connect a domain of your own. The agent keeps its address across reconnects, so webhook and OAuth callback URLs survive a restart.
 - **No warning page.** Visitors and webhook senders reach your service directly. Protection is a choice per tunnel: a password or a list of networks, enforced on the server.
 - **An inspector on your machine.** Every request with headers and bodies at `127.0.0.1:4040`, with replay and copy as `curl`, and a JSON API for scripts. Nothing of it leaves the machine.
+- **Works with coding agents.** Hand Claude Code, Cursor or Codex one sentence and it puts your site online: each install publishes instructions for agents at `/agents.md`, `exposehub mcp` offers tunnels as MCP tools (your team's own domains included), and `--json` makes the output easy to read for scripts. `exposehub http ./dist` serves a build folder directly.
 - **Made for a team.** Teams, one token per machine, request logs with secrets redacted, a Tunnels page to close one you left running at home, and an admin area with an audit log.
 - **Self-hosting in one script.** `install.sh` and Docker Compose on one Linux server, with certificates issued automatically, or a Helm chart for Kubernetes. Every setting is an environment variable.
 

@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -230,6 +231,20 @@ func (c *ControlPlane) DomainOwner(hostname string) (string, bool) {
 	defer c.mu.RUnlock()
 	account, ok := c.domains[hostname]
 	return account, ok
+}
+
+// DomainsOf implements DomainLister: the domains account has verified, sorted.
+func (c *ControlPlane) DomainsOf(account string) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var out []string
+	for hostname, owner := range c.domains {
+		if owner == account {
+			out = append(out, hostname)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Run polls the control plane until ctx is cancelled.

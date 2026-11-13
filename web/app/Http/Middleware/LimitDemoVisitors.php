@@ -23,7 +23,7 @@ class LimitDemoVisitors
 {
     /** Route names a demo account may use. */
     private const array ALLOWED = [
-        'home', 'docs', 'legal.*',
+        'home', 'docs', 'agents', 'legal.*',
         'dashboard', 'tunnels.index', 'inspector', 'logs.index', 'tokens.index', 'domains.index', 'access.index',
         'logout',
     ];
