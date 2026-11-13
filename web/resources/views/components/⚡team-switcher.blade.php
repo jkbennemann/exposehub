@@ -108,8 +108,18 @@ new class extends Component {
                 </flux:menu.item>
             @endforeach
 
+            {{-- Where a team is managed: members, invitations, single sign-on. Closed to a visitor of the demo. --}}
             @unless (auth()->user()->is_demo)
                 <flux:menu.separator />
+
+                @if ($current = $this->currentTeam())
+                    <flux:menu.item icon="cog-6-tooth" :href="route('teams.edit', ['team' => $current['slug']])" wire:navigate data-test="team-switcher-settings">
+                        {{ __('Team settings') }}
+                    </flux:menu.item>
+                @endif
+                <flux:menu.item icon="users" :href="route('teams.index')" wire:navigate data-test="team-switcher-all">
+                    {{ __('All my teams') }}
+                </flux:menu.item>
 
                 <flux:modal.trigger name="create-team-switcher">
                     <flux:menu.item icon="plus" class="cursor-pointer" data-test="team-switcher-new-team">

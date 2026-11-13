@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- A team's settings (members, invitations, single sign-on) were reachable only through an unlabelled pencil icon under Settings → Teams. The team switcher now has "Team settings" for the current team and "All my teams", and the button in the list says what it leads to.
+
 ## [0.3.0] - 2026-11-13
 
 ### Added

@@ -118,16 +118,17 @@ new #[Title('Teams')] class extends Component {
                             </flux:modal.trigger>
                         @endif
 
-                        <flux:tooltip :content="$team->role === 'member' ? __('View team') : __('Edit team')">
-                            <flux:button
-                                variant="ghost"
-                                size="sm"
-                                :icon="$team->role === 'member' ? 'eye' : 'pencil'"
-                                :href="route('teams.edit', $team->slug)"
-                                wire:navigate
-                                :data-test="$team->role === 'member' ? 'team-view-button' : 'team-edit-button'"
-                            />
-                        </flux:tooltip>
+                        {{-- Said in words: an icon alone did not tell anyone that the team's settings are behind it. --}}
+                        <flux:button
+                            variant="ghost"
+                            size="sm"
+                            :icon="$team->role === 'member' ? 'eye' : 'cog-6-tooth'"
+                            :href="route('teams.edit', $team->slug)"
+                            wire:navigate
+                            :data-test="$team->role === 'member' ? 'team-view-button' : 'team-edit-button'"
+                        >
+                            {{ $team->role === 'member' ? __('View') : __('Team settings') }}
+                        </flux:button>
                     </div>
                 </div>
 
