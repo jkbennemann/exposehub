@@ -179,6 +179,14 @@ web:
     tokenDays: 30
     # false for a provider that does not say whether an address is confirmed.
     requireVerifiedEmail: true
+    # Only with networkPolicy.type cilium, which lets the dashboard reach
+    # named hosts only: the hosts of the identity providers it may call on
+    # port 443. The host of the issuer above is added by itself. List here
+    # every other host its discovery document names (token, keys), and the
+    # hosts of each team's provider an admin approves; until then a sign-in
+    # through that provider fails with "discovery unreachable" in the log.
+    # "*" matches within a name, as in "*.okta.com".
+    providerHosts: []
 
   # The demo: "Try the demo" on the landing page signs a visitor in without an
   # account, into a team with sample data, where they can open real tunnels.
@@ -339,8 +347,9 @@ ingress:
 #             internet for mail and the password check, and the API server
 #             for custom domains, neither of which a standard policy can name.
 # cilium:     CiliumNetworkPolicy with the same rules, plus dashboard egress
-#             limited to its Postgres, DNS, web.passwordCheckHost by name, the
-#             API server (custom domains) and the SMTP port (mail).
+#             limited to its Postgres, DNS, web.passwordCheckHost and the
+#             identity providers (web.sso.providerHosts) by name, the API
+#             server (custom domains) and the SMTP port (mail).
 # none:       no policies: every pod in the cluster can reach the server and
 #             the dashboard. Then server.trustedProxies must name only the
 #             ingress controller's own addresses, not the pod CIDR.

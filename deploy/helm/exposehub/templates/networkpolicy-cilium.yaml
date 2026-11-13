@@ -42,8 +42,9 @@ spec:
 ---
 # Dashboard: reachable from the ingress controller, the tunnel server and
 # kubelet probes on 8080. It may talk to its database, to kube-dns (which
-# is also how it checks the DNS records of a team's own domain) and to the
-# breached-password service{{ if .Values.web.mail.host }}, and to
+# is also how it checks the DNS records of a team's own domain), to the
+# breached-password service, to the identity providers of single sign-on
+# (web.sso.providerHosts){{ if .Values.web.mail.host }}, and to
 # the mail server{{ end }}.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -111,6 +112,26 @@ spec:
     # The breached-password check on registration and password change.
     - toFQDNs:
         - matchName: {{ . | quote }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    {{- $providers := .Values.web.sso.providerHosts | default list }}
+    {{- with .Values.web.sso.issuer }}
+    {{- $providers = append $providers (regexReplaceAll ":[0-9]+$" (urlParse .).host "") }}
+    {{- end }}
+    {{- with ($providers | compact | uniq) }}
+    # Single sign-on: discovery, the token exchange and the signing keys of
+    # the identity providers.
+    - toFQDNs:
+        {{- range . }}
+        {{- if contains "*" . }}
+        - matchPattern: {{ . | quote }}
+        {{- else }}
+        - matchName: {{ . | quote }}
+        {{- end }}
+        {{- end }}
       toPorts:
         - ports:
             - port: "443"

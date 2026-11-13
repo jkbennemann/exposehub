@@ -78,6 +78,7 @@ With Okta: Applications → Create App Integration → OIDC, Web Application; an
 - The page says how many accounts already have an address of the domains. They will sign in through the provider and join the team. Admins of the install are the exception: a team's provider never signs one in, and they keep their password.
 - A domain belongs to one provider. A second team cannot be approved for it, and the install's own provider comes first.
 - The issuer, and every address its discovery document names, has to be https on the usual port and lead to the public internet. A team's provider cannot point the dashboard at an address inside your network. The install's own provider may be anywhere.
+- The dashboard calls the provider itself, so it has to be able to reach it on port 443. Where outbound traffic is limited to named hosts (the Helm chart with `networkPolicy.type: cilium`, or a firewall of your own), add the provider's hosts there when you approve it: `web.sso.providerHosts` in the chart. Without that, signing in fails and the log says `discovery unreachable`.
 - The client secret is stored encrypted with the application key and is never shown again.
 - An admin can withdraw the approval, and the owner can remove the provider. The accounts and their place in the team stay; they sign in with a password from then on and get one by asking for a reset mail.
 

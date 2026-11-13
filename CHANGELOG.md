@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Fixed
 
+- Helm chart with `networkPolicy.type: cilium`: the dashboard could not reach an identity provider, so every single sign-on failed with `discovery unreachable`. The policy now opens port 443 to the host of `web.sso.issuer` and to the hosts in the new `web.sso.providerHosts`, where the hosts of teams' providers go. The default `kubernetes` policy and the Compose setup were not affected.
 - A team's settings (members, invitations, single sign-on) were reachable only through an unlabelled pencil icon under Settings → Teams. The team switcher now has "Team settings" for the current team and "All my teams", and the button in the list says what it leads to.
 
 ## [0.3.0] - 2026-11-13

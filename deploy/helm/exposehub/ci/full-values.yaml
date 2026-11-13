@@ -22,6 +22,9 @@ web:
     name: Okta
     tokenDays: 14
     requireVerifiedEmail: false
+    providerHosts:
+      - keys.example.com
+      - "*.okta.com"
   demo:
     enabled: true
     resetMinutes: 15
