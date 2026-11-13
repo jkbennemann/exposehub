@@ -156,7 +156,8 @@ class DemoTest extends TestCase
 
         $this->assertTrue($tokens[$demo->id]['demo']);
         $this->assertArrayNotHasKey('demo', $tokens[$real->id]);
-        $this->assertSame([], $snapshot['reserved']);
+        // The demo's sample addresses are reserved for it (see DemoSecurityTest); its domain and rules are left out.
+        $this->assertSame(['demo-api.tunnels.example', 'demo-shop.tunnels.example'], collect($snapshot['reserved'])->pluck('hostname')->sort()->values()->all());
         $this->assertSame([], $snapshot['domains']);
         $this->assertSame([], $snapshot['teams']);
     }
@@ -255,7 +256,8 @@ class DemoTest extends TestCase
 
     public function test_the_demo_holds_a_fixed_number_of_visitors_and_one_address_starts_only_a_few(): void
     {
-        config(['exposehub.demo.max_visitors' => 2, 'exposehub.demo.visitors_per_ip_per_hour' => 3]);
+        // A start that finds the demo full counts against the address too.
+        config(['exposehub.demo.max_visitors' => 2, 'exposehub.demo.visitors_per_ip_per_hour' => 4]);
 
         $this->post(route('demo.enter'))->assertRedirect();
         $this->post(route('logout'));
@@ -268,7 +270,7 @@ class DemoTest extends TestCase
         config(['exposehub.demo.max_visitors' => 50]);
         $this->post(route('demo.enter'))->assertRedirect();
         $this->post(route('logout'));
-        // The fourth start from this address within the hour.
+        // The fifth start from this address within the hour.
         $this->post(route('demo.enter'))->assertRedirect(route('home'))->assertSessionHas('demo');
         $this->assertSame(3, User::query()->where('email', 'like', 'visitor-%')->count());
     }

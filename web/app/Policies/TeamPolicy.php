@@ -57,7 +57,9 @@ class TeamPolicy
      */
     public function leave(User $user, Team $team): bool
     {
-        return ! $team->is_personal
+        // A visitor of the demo belongs to the demo team for as long as they exist.
+        return ! $user->is_demo
+            && ! $team->is_personal
             && $user->belongsToTeam($team)
             && ! $user->ownsTeam($team);
     }

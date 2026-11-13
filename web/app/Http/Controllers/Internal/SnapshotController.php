@@ -7,6 +7,7 @@ use App\Models\AgentToken;
 use App\Models\CustomDomain;
 use App\Models\TunnelDisconnect;
 use App\Support\Access\AccessSnapshot;
+use App\Support\Demo;
 use App\Support\ServiceStatus;
 use Generator;
 use HashContext;
@@ -131,6 +132,9 @@ class SnapshotController extends Controller
         $tokens = AgentToken::query()
             ->usable()
             ->join('teams', 'teams.id', '=', 'agent_tokens.team_id')
+            // Tokens of a demo that was switched off stop working at once,
+            // not only when the cleanup has removed them.
+            ->when(! Demo::enabled(), fn ($tokens) => $tokens->where('teams.is_demo', false))
             ->select([
                 'agent_tokens.id',
                 'agent_tokens.hash',

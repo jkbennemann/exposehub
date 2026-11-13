@@ -33,9 +33,11 @@ final class AccessSnapshot
      */
     public static function reserved(): Generator
     {
+        // The demo team's sample addresses are listed like any other. Its own
+        // agents get random names only, so this keeps the names from everyone:
+        // nobody can serve a page on an address the demo shows its visitors.
         $addresses = SavedAddress::query()
-            // The demo team's addresses are sample data: its agents get random names only.
-            ->whereHas('team', fn ($team) => $team->where('is_demo', false))
+            ->whereHas('team')
             ->select(['id', 'hostname', 'team_id'])
             ->lazyById(self::CHUNK);
 

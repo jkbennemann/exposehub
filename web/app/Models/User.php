@@ -17,6 +17,7 @@ use Illuminate\Support\Str;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use SensitiveParameter;
 
 /**
  * @property int $id
@@ -89,6 +90,28 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function isAdmin(): bool
     {
         return ! $this->is_demo && ! $this->isSuspended() && ($this->isOwner() || ($this->is_admin && $this->email_verified_at !== null));
+    }
+
+    /**
+     * An account of the demo has an address made up for it. Nothing is ever
+     * mailed to it, whatever asks for it, so that the demo cannot be used to
+     * send mail anywhere.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        if (! $this->is_demo) {
+            parent::sendEmailVerificationNotification();
+        }
+    }
+
+    /**
+     * @param  string  $token
+     */
+    public function sendPasswordResetNotification(#[SensitiveParameter] $token): void
+    {
+        if (! $this->is_demo) {
+            parent::sendPasswordResetNotification($token);
+        }
     }
 
     public function isSuspended(): bool

@@ -25,7 +25,8 @@ What keeps that within bounds:
 - **A visitor cannot leave the demo.** Account settings, passkeys, two-factor, teams, invitations and the admin area are closed to them. Their address ends in `@demo.invalid` and never gets mail.
 - **Nothing is kept.** Every `EXPOSEHUB_DEMO_RESET_MINUTES` (30 by default) the demo team, its visitors, their tokens and their request logs are deleted and the sample data is laid out again. The tunnel server closes the tunnels of the deleted tokens at its next sync, within seconds. Visitors are signed out by this.
 - **The tunnel server limits demo tunnels.** They get random addresses only, show browsers a notice before the tunnelled page, and are capped in number and in requests a minute. [server.md](server.md) has the settings.
-- **The demo's sample addresses and domain are display only.** They are left out of what the tunnel server is told, so no tunnel is served on them and no certificate is asked for.
+- **Nobody serves a page on what the demo shows.** Its two sample addresses are reserved for the demo team, whose own agents cannot pick a name, so no agent of anyone opens them. Its sample domain and rules are left out of what the tunnel server is told, so no certificate is asked for.
+- **Switching it off takes effect at once.** Visitors are signed out on their next request and their tokens stop working at the tunnel server's next sync; the leftovers are deleted within the hour.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -35,6 +36,8 @@ What keeps that within bounds:
 | `EXPOSEHUB_DEMO_VISITORS_PER_IP_PER_HOUR` | `6` | How often one address may start the demo in an hour. |
 | `EXPOSEHUB_DEMO_TOKENS_PER_VISITOR` | `2` | How many tokens, and so tunnels, one visitor can have. |
 
-The reset is one of the dashboard's scheduled jobs, so the scheduler has to run (it does in the Compose setup and the Helm chart). `php artisan demo:reset` wipes the demo at once. After switching the demo off, the same job removes what is left of it within the hour.
+The limit per address counts an IPv6 /64 as one address, and it depends on the dashboard seeing visitors' real addresses: behind a proxy, `EXPOSEHUB_TRUSTED_PROXIES` has to name that proxy, or every visitor counts as one. The cap on visitors can still be filled by someone with many addresses, who then keeps others out until the next reset; that is the worst they can do with it.
+
+The reset is one of the dashboard's scheduled jobs, so the scheduler has to run (it does in the Compose setup and the Helm chart). `php artisan demo:reset` wipes the demo at once.
 
 In the admin area, visitors are listed under People → Demo visitors, apart from people with an account, and their tunnels show on the Tunnels page like any other, where you can close one.
