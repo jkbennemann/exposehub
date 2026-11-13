@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-13
+
 ### Changed
 
 - The landing page says that exposehub is open source: a line under the headline, a section with the repository's layout and licence, and an icon in the header of the landing and docs pages that leads to the source. The icon is GitHub's when `EXPOSEHUB_SOURCE_URL` points there and a neutral one for a fork kept elsewhere; with the setting empty, none of it is shown.
@@ -74,6 +76,7 @@ First public release.
 - The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
 - The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
 
-[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.0

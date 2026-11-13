@@ -3,8 +3,8 @@ name: exposehub
 description: Self-hosted tunnels to local machines. The tunnel server, the dashboard and an optional Postgres.
 type: application
 # The chart, the images and the agent share one version.
-version: 0.1.1
-appVersion: "0.1.1"
+version: 0.1.2
+appVersion: "0.1.2"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/jkbennemann/exposehub
 sources:
