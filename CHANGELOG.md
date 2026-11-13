@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-13
+
 ### Changed
 
 - The login page shows one way in at a time. It opens on email and password, with the passkey and single sign-on below the form; single sign-on by work address has a view of its own instead of a second email field above the first. Where the install has its own provider, that button leads. The login, registration and password pages share a new layout with the form on the right and, on wide screens, a panel that shows what a tunnel does.
@@ -118,7 +120,8 @@ First public release.
 - The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
 - The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
 
-[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.2.0

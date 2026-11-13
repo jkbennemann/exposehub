@@ -4,7 +4,7 @@ Runs the exposehub tunnel server, the dashboard and (optionally) a Postgres for 
 
 ```sh
 helm install exposehub oci://ghcr.io/jkbennemann/charts/exposehub \
-  --version 0.3.1 --namespace exposehub --create-namespace \
+  --version 0.3.2 --namespace exposehub --create-namespace \
   -f my-values.yaml
 ```
 
