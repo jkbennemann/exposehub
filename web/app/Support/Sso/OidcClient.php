@@ -13,7 +13,7 @@ use stdClass;
 use Throwable;
 
 /**
- * Talks OpenID Connect to the identity provider: where to send a person to
+ * Talks OpenID Connect to an identity provider: where to send a person to
  * sign in, and what the provider then says about them.
  *
  * Only the authorization code flow with PKCE is spoken. The id token is the
@@ -38,14 +38,14 @@ final class OidcClient
      * Where to send the person. $fresh asks the provider to make them prove
      * who they are again, even if it still knows them.
      */
-    public function authorizationUrl(string $state, string $nonce, string $verifier, bool $fresh = false): string
+    public function authorizationUrl(Connection $connection, string $state, string $nonce, string $verifier, bool $fresh = false): string
     {
-        $endpoint = $this->discovery()['authorization_endpoint'];
+        $endpoint = $this->discovery($connection)['authorization_endpoint'];
         $query = http_build_query([
             'response_type' => 'code',
-            'client_id' => $this->clientId(),
+            'client_id' => $connection->clientId,
             'redirect_uri' => Sso::redirectUri(),
-            'scope' => (string) config('exposehub.sso.scopes'),
+            'scope' => $connection->scopes,
             'state' => $state,
             'nonce' => $nonce,
             'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='),
@@ -60,9 +60,9 @@ final class OidcClient
      *
      * @throws SsoException
      */
-    public function claimsFor(string $code, string $verifier, string $nonce): Claims
+    public function claimsFor(Connection $connection, string $code, string $verifier, string $nonce): Claims
     {
-        $discovery = $this->discovery();
+        $discovery = $this->discovery($connection);
         $form = [
             'grant_type' => 'authorization_code',
             'code' => $code,
@@ -72,10 +72,10 @@ final class OidcClient
         $request = $this->http()->asForm();
         $methods = $discovery['token_endpoint_auth_methods_supported'] ?? ['client_secret_basic'];
         if (is_array($methods) && ! in_array('client_secret_basic', $methods, true) && in_array('client_secret_post', $methods, true)) {
-            $form += ['client_id' => $this->clientId(), 'client_secret' => $this->clientSecret()];
+            $form += ['client_id' => $connection->clientId, 'client_secret' => $connection->clientSecret];
         } else {
             // Both are form-encoded before they go into the header (RFC 6749, 2.3.1).
-            $request = $request->withBasicAuth(urlencode($this->clientId()), urlencode($this->clientSecret()));
+            $request = $request->withBasicAuth(urlencode($connection->clientId), urlencode($connection->clientSecret));
         }
 
         try {
@@ -89,7 +89,7 @@ final class OidcClient
             throw new SsoException(__(self::FAILED), 'token endpoint answered '.$response->status().(is_string($error) ? ' '.Str::limit($error, 80) : ''));
         }
 
-        $token = $this->verified($idToken, $nonce);
+        $token = $this->verified($connection, $idToken, $nonce);
         $claims = $this->claims($token);
 
         // Some providers keep the id token short and say the rest at the
@@ -115,7 +115,7 @@ final class OidcClient
      *
      * @throws SsoException
      */
-    public function verified(string $idToken, string $nonce): stdClass
+    public function verified(Connection $connection, string $idToken, string $nonce): stdClass
     {
         $parts = explode('.', $idToken);
         $header = count($parts) === 3 ? json_decode((string) base64_decode(strtr($parts[0], '-_', '+/'), true), true) : null;
@@ -125,10 +125,10 @@ final class OidcClient
             throw new SsoException(__(self::FAILED), 'id token signed with '.(is_string($alg) ? Str::limit($alg, 20) : 'no algorithm'));
         }
 
-        $keys = $this->keys();
+        $keys = $this->keys($connection);
         if (is_string($kid) && ! isset($keys[$kid])) {
             // The provider may have changed its keys since they were last fetched.
-            $keys = $this->keys(refresh: true);
+            $keys = $this->keys($connection, refresh: true);
         }
 
         // The library takes its clock and its tolerance from static properties;
@@ -146,8 +146,8 @@ final class OidcClient
         }
 
         $problem = match (true) {
-            ($token->iss ?? null) !== Sso::issuer() => 'issued by someone else',
-            ! $this->isFor($token) => 'issued for another client',
+            ($token->iss ?? null) !== $connection->issuer => 'issued by someone else',
+            ! $this->isFor($connection, $token) => 'issued for another client',
             ! isset($token->exp) || ! is_numeric($token->exp) => 'without an expiry',
             ! isset($token->iat) || ! is_numeric($token->iat) => 'without an issue time',
             ! isset($token->nonce) || ! is_string($token->nonce) || ! hash_equals($nonce, $token->nonce) => 'for another sign-in (nonce)',
@@ -164,14 +164,14 @@ final class OidcClient
     /**
      * The token names this client as its audience, and as the party it was made for.
      */
-    private function isFor(stdClass $token): bool
+    private function isFor(Connection $connection, stdClass $token): bool
     {
         $audiences = is_array($token->aud ?? null) ? $token->aud : [$token->aud ?? null];
-        if (! in_array($this->clientId(), $audiences, true)) {
+        if (! in_array($connection->clientId, $audiences, true)) {
             return false;
         }
         if (isset($token->azp)) {
-            return $token->azp === $this->clientId();
+            return $token->azp === $connection->clientId;
         }
 
         return count($audiences) === 1;
@@ -241,9 +241,9 @@ final class OidcClient
      *
      * @throws SsoException
      */
-    public function discovery(): array
+    public function discovery(Connection $connection): array
     {
-        $issuer = Sso::issuer();
+        $issuer = $connection->issuer;
 
         return Cache::remember('exposehub.sso.discovery.'.sha1($issuer), self::CACHE_SECONDS, function () use ($issuer) {
             try {
@@ -286,16 +286,16 @@ final class OidcClient
      *
      * @throws SsoException
      */
-    private function keys(bool $refresh = false): array
+    private function keys(Connection $connection, bool $refresh = false): array
     {
-        $cache = 'exposehub.sso.keys.'.sha1(Sso::issuer());
+        $cache = 'exposehub.sso.keys.'.sha1($connection->issuer);
         if ($refresh) {
             Cache::forget($cache);
         }
 
-        $set = Cache::remember($cache, self::CACHE_SECONDS, function () {
+        $set = Cache::remember($cache, self::CACHE_SECONDS, function () use ($connection) {
             try {
-                $response = $this->http()->get($this->discovery()['jwks_uri']);
+                $response = $this->http()->get($this->discovery($connection)['jwks_uri']);
             } catch (Throwable $e) {
                 throw new SsoException(__(self::FAILED), 'keys unreachable: '.$e->getMessage());
             }
@@ -341,15 +341,5 @@ final class OidcClient
     {
         // Not following redirects: the answer must come from the address that was asked.
         return Http::timeout(8)->connectTimeout(4)->acceptJson()->withoutRedirecting();
-    }
-
-    private function clientId(): string
-    {
-        return (string) config('exposehub.sso.client_id');
-    }
-
-    private function clientSecret(): string
-    {
-        return (string) config('exposehub.sso.client_secret');
     }
 }

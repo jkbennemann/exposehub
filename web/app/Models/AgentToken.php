@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Sso\Connection;
 use App\Support\Sso\Sso;
 use Carbon\CarbonInterface;
 use Database\Factories\AgentTokenFactory;
@@ -79,35 +80,44 @@ class AgentToken extends Model
      * The single sign-on part of scopeUsable(). A token passes when its
      * account
      *
-     * - signed in through the provider since $cutoff, or
-     * - was never tied to the provider and is none of its business: an
+     * - signed in through a provider since $cutoff, or
+     * - was never tied to a provider and is none of their business: an
      *   address of another domain, or one of the people who run the install,
      *   who keep their password as a way in.
      *
-     * An account the provider answers for that has not signed in through it
-     * yet passes too, until single sign-on has been on for as long as tokens
-     * last. Switching it on must not close every tunnel that minute.
+     * An account a provider answers for that has not signed in through it
+     * yet passes too, until that provider has been in force for as long as
+     * tokens last. Switching one on must not close every tunnel that minute.
      *
      * @param  Builder<AgentToken>  $tokens
      */
     private static function usableUnderSso(Builder $tokens, CarbonInterface $cutoff): void
     {
+        $connections = Sso::connections();
+        if ($connections->isEmpty()) {
+            return;
+        }
         $tied = fn () => DB::table('user_identities')
             ->selectRaw('1')
             ->whereColumn('user_identities.user_id', 'agent_tokens.user_id')
-            ->where('user_identities.issuer', Sso::issuer());
+            ->whereIn('user_identities.issuer', $connections->pluck('issuer')->unique()->all());
+        // Domains whose provider has been in force for longer than tokens last.
+        $overdue = $connections
+            ->filter(fn (Connection $connection) => $connection->activeSince->lessThan($cutoff))
+            ->flatMap(fn (Connection $connection) => $connection->domains)
+            ->unique()->values()->all();
 
         $tokens->whereExists($tied()->where('user_identities.signed_in_at', '>=', $cutoff));
 
-        $tokens->orWhere(function (Builder $never) use ($tied, $cutoff) {
+        $tokens->orWhere(function (Builder $never) use ($tied, $overdue) {
             $never->whereNotExists($tied());
 
-            if (Sso::since()?->greaterThanOrEqualTo($cutoff)) {
+            if ($overdue === []) {
                 return;
             }
-            $never->whereHas('user', fn (Builder $users) => $users->where(function (Builder $outside) {
-                $outside->where(function (Builder $otherDomain) {
-                    foreach (Sso::domains() as $domain) {
+            $never->whereHas('user', fn (Builder $users) => $users->where(function (Builder $outside) use ($overdue) {
+                $outside->where(function (Builder $otherDomain) use ($overdue) {
+                    foreach ($overdue as $domain) {
                         $otherDomain->whereRaw("lower(email) not like ? escape '!'", ['%@'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $domain)]);
                     }
                 })->orWhereIn(DB::raw('lower(email)'), config('exposehub.admin_emails') ?: ['']);

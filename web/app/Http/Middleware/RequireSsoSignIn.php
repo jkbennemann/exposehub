@@ -28,11 +28,12 @@ class RequireSsoSignIn
             return $next($request);
         }
 
+        $message = __('Your account signs in with :name. Use single sign-on on this page.', ['name' => Sso::forEmail($user->email)->name ?? __('single sign-on')]);
+
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        $message = __('Your account signs in with :name. Use the button for it.', ['name' => Sso::name()]);
         if ($request->expectsJson() || $request->hasHeader('X-Livewire')) {
             abort(403, $message);
         }

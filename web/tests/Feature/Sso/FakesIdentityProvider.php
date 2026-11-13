@@ -36,6 +36,13 @@ trait FakesIdentityProvider
 
     protected int $keySetFetches = 0;
 
+    /**
+     * The issuers the fake provider answers at.
+     *
+     * @var array<int, string>
+     */
+    protected array $providerIssuers = [self::ISSUER];
+
     protected function setUpSso(array $config = []): void
     {
         config([
@@ -52,20 +59,26 @@ trait FakesIdentityProvider
         $this->providerKey('key-1');
 
         Http::fake(function (Request $request) {
-            return match (true) {
-                $request->url() === self::ISSUER.'/.well-known/openid-configuration' => Http::response([
-                    'issuer' => self::ISSUER,
-                    'authorization_endpoint' => self::ISSUER.'/authorize',
-                    'token_endpoint' => self::ISSUER.'/token',
-                    'jwks_uri' => self::ISSUER.'/keys',
-                    'userinfo_endpoint' => self::ISSUER.'/userinfo',
+            // The same provider software answers at every issuer a test has set up.
+            $issuer = collect($this->providerIssuers)->first(fn (string $issuer) => str_starts_with($request->url(), $issuer.'/'));
+            if ($issuer === null) {
+                return Http::response('unexpected request to '.$request->url(), 500);
+            }
+
+            return match ($request->url()) {
+                $issuer.'/.well-known/openid-configuration' => Http::response([
+                    'issuer' => $issuer,
+                    'authorization_endpoint' => $issuer.'/authorize',
+                    'token_endpoint' => $issuer.'/token',
+                    'jwks_uri' => $issuer.'/keys',
+                    'userinfo_endpoint' => $issuer.'/userinfo',
                     ...$this->discoveryOverrides,
                 ]),
-                $request->url() === self::ISSUER.'/keys' => Http::response(['keys' => $this->publishedKeys()]),
-                $request->url() === self::ISSUER.'/token' => $this->nextIdToken === null
+                $issuer.'/keys' => Http::response(['keys' => $this->publishedKeys()]),
+                $issuer.'/token' => $this->nextIdToken === null
                     ? Http::response(['error' => 'invalid_grant'], 400)
                     : Http::response(['id_token' => $this->nextIdToken, 'access_token' => 'access-token', 'token_type' => 'Bearer']),
-                $request->url() === self::ISSUER.'/userinfo' => $this->userinfo === null ? Http::response([], 401) : Http::response($this->userinfo),
+                $issuer.'/userinfo' => $this->userinfo === null ? Http::response([], 401) : Http::response($this->userinfo),
                 default => Http::response('unexpected request to '.$request->url(), 500),
             };
         });
@@ -136,12 +149,12 @@ trait FakesIdentityProvider
      *
      * @return array<string, string>
      */
-    protected function startSignIn(array $query = []): array
+    protected function startSignIn(array $query = [], string $issuer = self::ISSUER): array
     {
         $response = $this->get(route('sso.redirect', $query));
         $response->assertRedirect();
         $location = (string) $response->headers->get('Location');
-        $this->assertStringStartsWith(self::ISSUER.'/authorize?', $location);
+        $this->assertStringStartsWith($issuer.'/authorize?', $location);
         parse_str((string) parse_url($location, PHP_URL_QUERY), $sent);
 
         return $sent;
@@ -153,10 +166,10 @@ trait FakesIdentityProvider
      *
      * @param  array<string, mixed>  $claims
      */
-    protected function signInThroughProvider(array $claims = [], array $query = []): TestResponse
+    protected function signInThroughProvider(array $claims = [], array $query = [], string $issuer = self::ISSUER): TestResponse
     {
-        $sent = $this->startSignIn($query);
-        $this->nextIdToken = $this->idToken($sent['nonce'], $claims);
+        $sent = $this->startSignIn($query, $issuer);
+        $this->nextIdToken = $this->idToken($sent['nonce'], ['iss' => $issuer, 'aud' => $sent['client_id'], ...$claims]);
 
         return $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code-from-provider']));
     }

@@ -57,7 +57,7 @@ trait ProfileValidationRules
     }
 
     /**
-     * With single sign-on, addresses of the provider's domains are the
+     * With single sign-on, addresses of a provider's domains are that
      * provider's to give out. Nobody registers one or moves an account to
      * one: such an account would sit there with a password its maker knows,
      * waiting for the address's real holder to be signed in to it. And an
@@ -78,11 +78,11 @@ trait ProfileValidationRules
             }
 
             if ($user?->identities()->exists()) {
-                $fail(__('Your address comes from :name. Change it there.', ['name' => Sso::name()]));
-            } elseif (Sso::answersFor($email) && ! in_array($email, config('exposehub.admin_emails', []), true)) {
+                $fail(__('Your address comes from :name. Change it there.', ['name' => Sso::forUser($user)->name ?? __('single sign-on')]));
+            } elseif (($connection = Sso::forEmail($email)) !== null && ! in_array($email, config('exposehub.admin_emails', []), true)) {
                 $fail($user === null
-                    ? __('Accounts with an address of this domain are made by signing in with :name.', ['name' => Sso::name()])
-                    : __('Addresses of this domain belong to accounts that sign in with :name.', ['name' => Sso::name()]));
+                    ? __('Accounts with an address of this domain are made by signing in with :name.', ['name' => $connection->name])
+                    : __('Addresses of this domain belong to accounts that sign in with :name.', ['name' => $connection->name]));
             }
         };
     }

@@ -304,6 +304,10 @@ new class extends Component
                 </div>
             @endif
 
+            @can('manageSso', $teamModel)
+                <livewire:pages::teams.sso :team="$teamModel" />
+            @endcan
+
             @if ($this->permissions->canDeleteTeam && ! $teamData['is_personal'])
                 <div class="space-y-6">
                     <div>

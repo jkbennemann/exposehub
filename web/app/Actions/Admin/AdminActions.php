@@ -6,10 +6,12 @@ use App\Actions\Account\DeleteAccount;
 use App\Models\AdminAction;
 use App\Models\AgentToken;
 use App\Models\CustomDomain;
+use App\Models\SsoConnection;
 use App\Models\User;
 use App\Notifications\Account\AccountNotice;
 use App\Support\AccountMail;
 use App\Support\Domains\Provisioner;
+use App\Support\Sso\Connection;
 use App\Support\Sso\Sso;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -138,14 +140,66 @@ class AdminActions
         // An account with a confirmed address of the identity provider's
         // domains is tied to whoever the provider signs in with that address.
         // Confirmed by an admin, an account someone else made would be theirs.
-        if (Sso::enabled() && Sso::answersFor($user->email)) {
-            throw new AuthorizationException(__('Addresses of this domain are confirmed by signing in with :name.', ['name' => Sso::name()]));
+        if (($connection = Sso::forEmail($user->email)) !== null) {
+            throw new AuthorizationException(__('Addresses of this domain are confirmed by signing in with :name.', ['name' => $connection->name]));
         }
 
         $user->markEmailAsVerified();
 
         AdminAction::record($admin, 'user.email_verified', $user, $this->label($user));
         AccountMail::send($user, AccountNotice::emailVerifiedByAdmin());
+    }
+
+    /**
+     * Put a team's identity provider into force. From then on it signs
+     * people in as any address of its domains and makes them members of the
+     * team, so this is the moment someone answers for the domains being the
+     * team's to claim.
+     */
+    public function approveSso(User $admin, SsoConnection $connection): void
+    {
+        $this->authorizeAdmin($admin);
+        if ($connection->approved_at !== null) {
+            return;
+        }
+
+        $domains = Sso::normalizeDomains($connection->domains);
+        $taken = Sso::connections()
+            ->reject(fn (Connection $other) => $other->teamId === $connection->team_id)
+            ->flatMap(fn (Connection $other) => $other->domains)
+            ->intersect($domains);
+        if ($taken->isNotEmpty()) {
+            throw new AuthorizationException(__('Another identity provider already answers for :domains. A domain belongs to one provider.', ['domains' => $taken->join(', ')]));
+        }
+
+        $connection->forceFill(['approved_at' => now(), 'approved_by' => $admin->id])->save();
+
+        AdminAction::record($admin, 'sso.approved', $connection, $connection->team->name, [
+            'issuer' => $connection->issuer, 'domains' => $domains, 'unconfirmed_addresses' => ! $connection->require_verified_email,
+        ]);
+    }
+
+    /**
+     * Take a team's identity provider out of force. Accounts of its domains
+     * go back to signing in with a password; they ask for a new one by mail.
+     */
+    public function revokeSso(User $admin, SsoConnection $connection): void
+    {
+        $this->authorizeAdmin($admin);
+        if ($connection->approved_at === null) {
+            return;
+        }
+
+        $connection->forceFill(['approved_at' => null, 'approved_by' => null])->save();
+
+        AdminAction::record($admin, 'sso.revoked', $connection, $connection->team->name, ['issuer' => $connection->issuer]);
+    }
+
+    private function authorizeAdmin(User $admin): void
+    {
+        if (! $admin->isAdmin()) {
+            throw new AuthorizationException(__('Only an admin may do this.'));
+        }
     }
 
     public function resendVerification(User $admin, User $user): void

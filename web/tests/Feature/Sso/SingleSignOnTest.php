@@ -127,7 +127,7 @@ class SingleSignOnTest extends TestCase
         // Never confirmed: whoever made it knows its password and may have tokens on it.
         $planted = User::factory()->unverified()->create(['email' => 'ada@corp.example']);
 
-        $this->signInThroughProvider()->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->signInThroughProvider()->assertRedirect(route('login'))->assertSessionHasErrors('sso');
 
         $this->assertGuest();
         $this->assertSame(0, UserIdentity::query()->count());
@@ -141,7 +141,7 @@ class SingleSignOnTest extends TestCase
         $this->post(route('logout'));
 
         // The address was given to a new colleague, who has another id at the provider.
-        $this->signInThroughProvider(['sub' => 'okta|ada-the-second'])->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['sub' => 'okta|ada-the-second'])->assertRedirect(route('login'))->assertSessionHasErrors('sso');
 
         $this->assertGuest();
         $this->assertSame(1, UserIdentity::query()->count());
@@ -150,11 +150,11 @@ class SingleSignOnTest extends TestCase
 
     public function test_the_provider_is_believed_only_for_confirmed_addresses_of_its_own_domains(): void
     {
-        $this->signInThroughProvider(['email' => 'ada@elsewhere.example'])->assertSessionHasErrors('email');
-        $this->signInThroughProvider(['email_verified' => false])->assertSessionHasErrors('email');
-        $this->signInThroughProvider(['email_verified' => null])->assertSessionHasErrors('email');
-        $this->signInThroughProvider(['email' => null])->assertSessionHasErrors('email');
-        $this->signInThroughProvider(['email' => 'ada@corp.example.evil.example'])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['email' => 'ada@elsewhere.example'])->assertSessionHasErrors('sso');
+        $this->signInThroughProvider(['email_verified' => false])->assertSessionHasErrors('sso');
+        $this->signInThroughProvider(['email_verified' => null])->assertSessionHasErrors('sso');
+        $this->signInThroughProvider(['email' => null])->assertSessionHasErrors('sso');
+        $this->signInThroughProvider(['email' => 'ada@corp.example.evil.example'])->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->assertSame(0, User::query()->count());
 
@@ -178,12 +178,12 @@ class SingleSignOnTest extends TestCase
         $this->assertAuthenticatedAs(User::query()->where('email', 'hedy@corp.example')->sole());
         $this->post(route('logout'));
         $this->userinfo = ['sub' => 'okta|joan', 'email' => 'someone-else@corp.example', 'email_verified' => true];
-        $this->signInThroughProvider(['sub' => 'okta|joan', 'email' => 'joan@corp.example', 'email_verified' => null])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['sub' => 'okta|joan', 'email' => 'joan@corp.example', 'email_verified' => null])->assertSessionHasErrors('sso');
         $this->assertGuest();
 
         // An answer about somebody else is not taken.
         $this->userinfo = ['sub' => 'okta|mallory', 'email' => 'grace@corp.example', 'email_verified' => true];
-        $this->signInThroughProvider(['sub' => 'okta|grace', 'email' => null])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['sub' => 'okta|grace', 'email' => null])->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->assertFalse(User::query()->where('email', 'grace@corp.example')->exists());
     }
@@ -195,7 +195,7 @@ class SingleSignOnTest extends TestCase
         $this->post(route('logout'));
         $user->forceFill(['suspended_at' => now()])->save();
 
-        $this->signInThroughProvider()->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->signInThroughProvider()->assertRedirect(route('login'))->assertSessionHasErrors('sso');
         $this->assertGuest();
     }
 
@@ -205,7 +205,7 @@ class SingleSignOnTest extends TestCase
 
         $this->get(route('sso.callback', ['state' => $sent['state'], 'error' => 'access_denied', 'error_description' => '<script>alert(1)</script>']))
             ->assertRedirect(route('login'))
-            ->assertSessionHasErrors(['email' => 'Okta did not sign you in.']);
+            ->assertSessionHasErrors(['sso' => 'Okta did not sign you in.']);
         $this->assertGuest();
     }
 }

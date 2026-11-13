@@ -7,6 +7,7 @@
         ['route' => 'admin.person', 'label' => null, 'match' => 'admin.person'],
         ['route' => 'admin.teams', 'label' => __('Teams'), 'match' => 'admin.teams'],
         ['route' => 'admin.tunnels', 'label' => __('Live tunnels'), 'match' => 'admin.tunnels'],
+        ['route' => 'admin.sso', 'label' => __('Single sign-on'), 'match' => 'admin.sso'],
         ['route' => 'admin.settings', 'label' => __('Settings'), 'match' => 'admin.settings'],
         ['route' => 'admin.audit', 'label' => __('Audit log'), 'match' => 'admin.audit'],
     ];

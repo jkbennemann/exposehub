@@ -35,6 +35,7 @@ Route::prefix('admin')
         Route::livewire('teams', 'pages::admin.teams')->name('teams');
         Route::livewire('tunnels', 'pages::admin.tunnels')->name('tunnels');
         Route::livewire('settings', 'pages::admin.settings')->name('settings');
+        Route::livewire('sso', 'pages::admin.sso')->name('sso');
         Route::livewire('audit', 'pages::admin.audit')->name('audit');
     });
 

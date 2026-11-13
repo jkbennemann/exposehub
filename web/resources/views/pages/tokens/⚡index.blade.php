@@ -63,9 +63,8 @@ new #[Title('Agent tokens')] #[RequiresTeamMembership] class extends Component {
     public function tokensGoodUntil(): ?\Carbon\CarbonInterface
     {
         $days = \App\Support\Sso\Sso::tokenDays();
-        $signedIn = $days > 0
-            ? Auth::user()->identities()->where('issuer', \App\Support\Sso\Sso::issuer())->value('signed_in_at')
-            : null;
+        $provider = $days > 0 ? \App\Support\Sso\Sso::forUser(Auth::user()) : null;
+        $signedIn = $provider === null ? null : Auth::user()->identities()->where('issuer', $provider->issuer)->value('signed_in_at');
 
         return $signedIn === null ? null : \Illuminate\Support\Carbon::parse($signedIn)->addDays($days);
     }
@@ -128,7 +127,7 @@ new #[Title('Agent tokens')] #[RequiresTeamMembership] class extends Component {
             </p>
             @if ($this->tokensGoodUntil !== null)
                 <p class="mt-3 max-w-[58ch] text-zinc-600 dark:text-zinc-300" data-test="tokens-sso-note">
-                    {{ trans_choice('{1} Your tokens work for one day after your last sign-in with :name, at present until :date.|[2,*] Your tokens work for :n days after your last sign-in with :name, at present until :date.', \App\Support\Sso\Sso::tokenDays(), ['n' => \App\Support\Sso\Sso::tokenDays(), 'name' => \App\Support\Sso\Sso::name(), 'date' => $this->tokensGoodUntil->isoFormat('D MMMM YYYY')]) }}
+                    {{ trans_choice('{1} Your tokens work for one day after your last sign-in with :name, at present until :date.|[2,*] Your tokens work for :n days after your last sign-in with :name, at present until :date.', \App\Support\Sso\Sso::tokenDays(), ['n' => \App\Support\Sso\Sso::tokenDays(), 'name' => \App\Support\Sso\Sso::forUser(auth()->user())?->name, 'date' => $this->tokensGoodUntil->isoFormat('D MMMM YYYY')]) }}
                     {{ __('Signing in here again moves that date on.') }}
                 </p>
             @endif

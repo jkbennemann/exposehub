@@ -3,12 +3,14 @@
 namespace App\Actions\Sso;
 
 use App\Actions\Teams\CreateTeam;
+use App\Enums\TeamRole;
+use App\Models\Team;
 use App\Models\User;
 use App\Models\UserIdentity;
 use App\Notifications\Account\AccountNotice;
 use App\Support\AccountMail;
 use App\Support\Sso\Claims;
-use App\Support\Sso\Sso;
+use App\Support\Sso\Connection;
 use App\Support\Sso\SsoException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -35,18 +37,19 @@ class SignInThroughProvider
      *
      * @throws SsoException
      */
-    public function handle(Claims $claims): User
+    public function handle(Connection $connection, Claims $claims): User
     {
         try {
-            [$user, $linked] = $this->accountFor($claims);
+            [$user, $linked] = $this->accountFor($connection, $claims);
         } catch (UniqueConstraintViolationException) {
             // Two first sign-ins of one person at once: the other one made the account.
             throw new SsoException(__('Signing in did not work. Try again.'));
         }
 
         if ($linked) {
-            AccountMail::send($user, AccountNotice::ssoLinked(Sso::name()));
+            AccountMail::send($user, AccountNotice::ssoLinked($connection->name));
         }
+        $this->joinTeam($connection, $user);
 
         return $user;
     }
@@ -57,11 +60,11 @@ class SignInThroughProvider
      * @throws SsoException
      * @throws UniqueConstraintViolationException
      */
-    private function accountFor(Claims $claims): array
+    private function accountFor(Connection $connection, Claims $claims): array
     {
-        return DB::transaction(function () use ($claims) {
+        return DB::transaction(function () use ($connection, $claims) {
             $identity = UserIdentity::query()
-                ->where('issuer', Sso::issuer())
+                ->where('issuer', $connection->issuer)
                 ->where('subject', $claims->subject)
                 ->lockForUpdate()
                 ->first();
@@ -69,14 +72,19 @@ class SignInThroughProvider
             if ($identity !== null) {
                 $user = $identity->user;
                 $this->refuseIfSuspended($user);
-                $this->refuseOwners($user->email);
-                $this->followAddress($user, $claims);
+                $this->refuseOwners($connection, $user->email);
+                // The provider answers for certain domains only. An account it
+                // made that has since left them is not its to sign in to.
+                if (! $connection->answersFor($user->email)) {
+                    throw new SsoException(__('Your account here no longer has an address :name answers for. Ask the people who run this service.', ['name' => $connection->name]));
+                }
+                $this->followAddress($connection, $user, $claims);
                 $identity->update(['signed_in_at' => now(), 'reminded_at' => null]);
 
                 return [$user, false];
             }
 
-            $email = $this->addressOf($claims);
+            $email = $this->addressOf($connection, $claims);
             $user = User::query()->whereRaw('lower(email) = ?', [$email])->lockForUpdate()->first();
             $linked = $user !== null;
 
@@ -84,19 +92,48 @@ class SignInThroughProvider
                 $user = $this->create($claims, $email);
             } else {
                 $this->refuseIfSuspended($user);
-                if ($user->is_demo || $user->identities()->where('issuer', Sso::issuer())->exists()) {
+                if ($user->is_demo || $user->identities()->where('issuer', $connection->issuer)->exists()) {
                     // The address was someone else's at the provider before. Their account is not handed on.
-                    throw new SsoException(__('An account with your address already belongs to another person at :name. Ask the people who run this service to sort it out.', ['name' => Sso::name()]));
+                    throw new SsoException(__('An account with your address already belongs to another person at :name. Ask the people who run this service to sort it out.', ['name' => $connection->name]));
                 }
                 if ($user->email_verified_at === null) {
                     throw new SsoException(__('An account with your address exists but never confirmed that address. Ask the people who run this service to remove it; then sign in again.'));
                 }
             }
 
-            $user->identities()->create(['issuer' => Sso::issuer(), 'subject' => $claims->subject, 'signed_in_at' => now()]);
+            $user->identities()->create(['issuer' => $connection->issuer, 'subject' => $claims->subject, 'signed_in_at' => now()]);
 
             return [$user, $linked];
         });
+    }
+
+    /**
+     * Signing in through a team's provider is what makes someone a member of
+     * that team. Whoever the provider lets in belongs to it: someone removed
+     * from the team here is back at their next sign-in, until the provider
+     * stops letting them in.
+     */
+    private function joinTeam(Connection $connection, User $user): void
+    {
+        $team = $connection->teamId === null ? null : Team::query()->find($connection->teamId);
+        if ($team === null) {
+            return;
+        }
+
+        $joined = DB::transaction(function () use ($team, $user) {
+            Team::query()->whereKey($team->id)->lockForUpdate()->first();
+            if ($team->memberships()->where('user_id', $user->id)->exists()) {
+                return false;
+            }
+            $team->memberships()->create(['user_id' => $user->id, 'role' => TeamRole::Member]);
+
+            return true;
+        });
+
+        // Someone new to the team starts there, not in the personal team made for them a moment ago.
+        if ($joined) {
+            $user->switchTeam($team);
+        }
     }
 
     /**
@@ -104,18 +141,18 @@ class SignInThroughProvider
      *
      * @throws SsoException
      */
-    private function addressOf(Claims $claims): string
+    private function addressOf(Connection $connection, Claims $claims): string
     {
         if ($claims->email === null) {
-            throw new SsoException(__(':name did not say what your email address is. Ask the people who run this service to let it share the address.', ['name' => Str::ucfirst(Sso::name())]));
+            throw new SsoException(__(':name did not say what your email address is. Ask the people who run this service to let it share the address.', ['name' => Str::ucfirst($connection->name)]));
         }
-        if (config('exposehub.sso.require_verified_email') && ! $claims->emailVerified) {
-            throw new SsoException(__(':name has not confirmed your email address yet. Confirm it there, then sign in again.', ['name' => Str::ucfirst(Sso::name())]));
+        if ($connection->requireVerifiedEmail && ! $claims->emailVerified) {
+            throw new SsoException(__(':name has not confirmed your email address yet. Confirm it there, then sign in again.', ['name' => Str::ucfirst($connection->name)]));
         }
-        if (! Sso::answersFor($claims->email)) {
-            throw new SsoException(__('You are signed in to :name as :email, an address this service does not take from it.', ['name' => Sso::name(), 'email' => $claims->email]));
+        if (! $connection->answersFor($claims->email)) {
+            throw new SsoException(__('You are signed in to :name as :email, an address this service does not take from it.', ['name' => $connection->name, 'email' => $claims->email]));
         }
-        $this->refuseOwners($claims->email);
+        $this->refuseOwners($connection, $claims->email);
 
         return $claims->email;
     }
@@ -129,10 +166,10 @@ class SignInThroughProvider
      *
      * @throws SsoException
      */
-    private function refuseOwners(string $email): void
+    private function refuseOwners(Connection $connection, string $email): void
     {
         if ($this->isOwnerAddress($email)) {
-            throw new SsoException(__('This address belongs to the people who run this service. It signs in with its password or passkey, not with :name.', ['name' => Sso::name()]));
+            throw new SsoException(__('This address belongs to the people who run this service. It signs in with its password or passkey, not with :name.', ['name' => $connection->name]));
         }
     }
 
@@ -171,11 +208,11 @@ class SignInThroughProvider
      * Take over a changed address from the provider, when it is one the
      * provider answers for, confirmed, and not somebody else's here.
      */
-    private function followAddress(User $user, Claims $claims): void
+    private function followAddress(Connection $connection, User $user, Claims $claims): void
     {
         $email = $claims->email;
-        if ($email === null || $email === Str::lower($user->email) || ! Sso::answersFor($email) || $this->isOwnerAddress($email)
-            || (config('exposehub.sso.require_verified_email') && ! $claims->emailVerified)
+        if ($email === null || $email === Str::lower($user->email) || ! $connection->answersFor($email) || $this->isOwnerAddress($email)
+            || ($connection->requireVerifiedEmail && ! $claims->emailVerified)
             || User::query()->whereRaw('lower(email) = ?', [$email])->whereKeyNot($user->id)->exists()) {
             return;
         }

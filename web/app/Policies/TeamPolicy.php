@@ -105,6 +105,17 @@ class TeamPolicy
     }
 
     /**
+     * Who may enter or remove the team's identity provider (single sign-on):
+     * the team's owner. It decides who gets into the team without being
+     * invited, so it is not an admin's to change. A personal team is one
+     * person's, and the demo team belongs to nobody.
+     */
+    public function manageSso(User $user, Team $team): bool
+    {
+        return ! $user->is_demo && ! $team->is_demo && ! $team->is_personal && $user->ownsTeam($team);
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Team $team): bool

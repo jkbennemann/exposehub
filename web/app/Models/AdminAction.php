@@ -63,6 +63,8 @@ class AdminAction extends Model
             'token.revoked' => __('revoked the agent token :what', ['what' => $this->subject_label]),
             'domain.removed' => __('removed the domain :what', ['what' => $this->subject_label]),
             'settings.updated' => __('changed the settings: :what', ['what' => $this->subject_label]),
+            'sso.approved' => __('approved the identity provider of :what', ['what' => $this->subject_label]),
+            'sso.revoked' => __('withdrew the approval of the identity provider of :what', ['what' => $this->subject_label]),
             default => $this->action,
         };
     }

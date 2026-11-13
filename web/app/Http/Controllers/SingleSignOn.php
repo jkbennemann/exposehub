@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Sso\SignInThroughProvider;
 use App\Models\UserIdentity;
+use App\Support\Sso\Connection;
 use App\Support\Sso\OidcClient;
 use App\Support\Sso\Sso;
 use App\Support\Sso\SsoException;
@@ -16,7 +17,8 @@ use Laravel\Fortify\Contracts\LoginResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Sign-in through the identity provider (EXPOSEHUB_SSO_*), over OpenID Connect.
+ * Sign-in through an identity provider, over OpenID Connect: the install's
+ * own (EXPOSEHUB_SSO_*) or a team's.
  */
 class SingleSignOn extends Controller
 {
@@ -35,21 +37,42 @@ class SingleSignOn extends Controller
     {
         abort_unless(Sso::enabled(), 404);
 
-        $confirming = $request->boolean('confirm') ? $request->user()?->id : null;
+        $confirming = $request->boolean('confirm') ? $request->user() : null;
+        $email = is_string($request->query('address')) ? Str::lower(trim($request->query('address'))) : '';
+
+        // Which provider: the one the signed-in person is known at, the one
+        // that answers for the address given, or the install's own.
+        $connection = match (true) {
+            $confirming !== null => Sso::forUser($confirming),
+            $email !== '' => Sso::forEmail($email),
+            default => Sso::find(Connection::INSTALL),
+        };
+        if ($connection === null) {
+            return $this->failed($request, new SsoException($email !== ''
+                ? __('No single sign-on is set up for that address. Use a passkey or your password.')
+                : __('Enter your work email address to find your organisation\'s sign-in.')));
+        }
+
         $pending = [
+            'connection' => $connection->key,
             'state' => Str::random(48),
             'nonce' => Str::random(48),
             'verifier' => Str::random(64),
-            'confirming' => $confirming,
+            'confirming' => $confirming?->id,
             'at' => now()->getTimestamp(),
         ];
 
         try {
-            $url = $oidc->authorizationUrl($pending['state'], $pending['nonce'], $pending['verifier'], fresh: $confirming !== null);
+            $url = $oidc->authorizationUrl($connection, $pending['state'], $pending['nonce'], $pending['verifier'], fresh: $confirming !== null);
         } catch (SsoException $e) {
             return $this->failed($request, $e);
         }
         $request->session()->put('sso.pending', $pending);
+
+        // Saves the person typing the address again at the provider.
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+            $url .= '&login_hint='.rawurlencode($email);
+        }
 
         return redirect()->away($url);
     }
@@ -69,23 +92,29 @@ class SingleSignOn extends Controller
             return $this->failed($request, new SsoException(__('That sign-in was started in another window or took too long. Start it again.')));
         }
 
+        // The provider the sign-in was started with, if it is still in force.
+        $connection = Sso::find((string) ($pending['connection'] ?? ''));
+        if ($connection === null) {
+            return $this->failed($request, new SsoException(__('That sign-in is no longer available. Start it again.')));
+        }
+
         try {
             if ($request->query('error') !== null) {
                 $code = is_string($request->query('error')) ? preg_replace('/[^a-z_]/', '', Str::limit($request->query('error'), 40, '')) : '';
-                throw new SsoException(__(':name did not sign you in.', ['name' => Str::ucfirst(Sso::name())]), "the provider answered error={$code}");
+                throw new SsoException(__(':name did not sign you in.', ['name' => Str::ucfirst($connection->name)]), "the provider answered error={$code}");
             }
             $code = $request->query('code');
             if (! is_string($code) || $code === '') {
-                throw new SsoException(__(':name did not sign you in.', ['name' => Str::ucfirst(Sso::name())]), 'no code came back');
+                throw new SsoException(__(':name did not sign you in.', ['name' => Str::ucfirst($connection->name)]), 'no code came back');
             }
-            $claims = $oidc->claimsFor($code, (string) $pending['verifier'], (string) $pending['nonce']);
+            $claims = $oidc->claimsFor($connection, $code, (string) $pending['verifier'], (string) $pending['nonce']);
             $fresh = $claims->authTime !== null && abs(now()->getTimestamp() - $claims->authTime) <= self::FRESH_SECONDS;
 
             if ($pending['confirming'] !== null) {
-                return $this->confirmed($request, (int) $pending['confirming'], $claims->subject, $fresh);
+                return $this->confirmed($request, $connection, (int) $pending['confirming'], $claims->subject, $fresh);
             }
 
-            $user = $signIn->handle($claims);
+            $user = $signIn->handle($connection, $claims);
         } catch (SsoException $e) {
             return $this->failed($request, $e);
         }
@@ -114,16 +143,16 @@ class SingleSignOn extends Controller
      * A signed-in person proved again who they are: that stands for a
      * password confirmation, if it is the same person and the proof is new.
      */
-    private function confirmed(Request $request, int $userId, string $subject, bool $fresh): Response
+    private function confirmed(Request $request, Connection $connection, int $userId, string $subject, bool $fresh): Response
     {
         $user = $request->user();
         $same = $user !== null && $user->id === $userId
-            && UserIdentity::query()->where('user_id', $userId)->where('issuer', Sso::issuer())->where('subject', $subject)->exists();
+            && UserIdentity::query()->where('user_id', $userId)->where('issuer', $connection->issuer)->where('subject', $subject)->exists();
 
         if (! $same || ! $fresh) {
             return redirect()->route('password.confirm')->withErrors([
                 'password' => $same
-                    ? __(':name did not ask you to sign in again, so this cannot count as a confirmation.', ['name' => Str::ucfirst(Sso::name())])
+                    ? __(':name did not ask you to sign in again, so this cannot count as a confirmation.', ['name' => Str::ucfirst($connection->name)])
                     : __('You confirmed as a different person than the one signed in here.'),
             ]);
         }
@@ -140,6 +169,6 @@ class SingleSignOn extends Controller
 
         return $request->user() !== null
             ? redirect()->route('password.confirm')->withErrors(['password' => $e->getMessage()])
-            : redirect()->route('login')->withErrors(['email' => $e->getMessage()]);
+            : redirect()->route('login')->withErrors(['sso' => $e->getMessage()]);
     }
 }

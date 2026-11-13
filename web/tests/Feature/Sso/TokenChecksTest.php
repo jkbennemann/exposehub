@@ -34,7 +34,7 @@ class TokenChecksTest extends TestCase
 
         $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))
             ->assertRedirect(route('login'))
-            ->assertSessionHasErrors('email');
+            ->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->assertSame(0, User::query()->count(), $what.' made an account');
     }
@@ -113,21 +113,21 @@ class TokenChecksTest extends TestCase
         $this->nextIdToken = $this->idToken($sent['nonce']);
 
         // Without the state, or with another one: someone else's sign-in pushed into this browser.
-        $this->get(route('sso.callback', ['code' => 'code']))->assertSessionHasErrors('email');
+        $this->get(route('sso.callback', ['code' => 'code']))->assertSessionHasErrors('sso');
         $this->assertGuest();
         $sent = $this->startSignIn();
         $this->nextIdToken = $this->idToken($sent['nonce']);
-        $this->get(route('sso.callback', ['state' => 'a-state-from-elsewhere', 'code' => 'code']))->assertSessionHasErrors('email');
+        $this->get(route('sso.callback', ['state' => 'a-state-from-elsewhere', 'code' => 'code']))->assertSessionHasErrors('sso');
         $this->assertGuest();
         // The failed attempt used the pending sign-in up.
-        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('email');
+        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('sso');
         $this->assertGuest();
 
         // One that took too long.
         $sent = $this->startSignIn();
         $this->nextIdToken = $this->idToken($sent['nonce'], ['exp' => now()->addHour()->getTimestamp()]);
         $this->travel(11)->minutes();
-        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('email');
+        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->travelBack();
 
@@ -135,7 +135,7 @@ class TokenChecksTest extends TestCase
         $sent = $this->startSignIn();
         $this->nextIdToken = $this->idToken($sent['nonce']);
         $this->flushSession();
-        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('email');
+        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->assertSame(0, User::query()->count());
     }
@@ -143,15 +143,15 @@ class TokenChecksTest extends TestCase
     public function test_the_provider_must_be_the_configured_one_and_as_well_protected(): void
     {
         $this->discoveryOverrides = ['issuer' => 'https://id.evil.example'];
-        $this->get(route('sso.redirect'))->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->get(route('sso.redirect'))->assertRedirect(route('login'))->assertSessionHasErrors('sso');
 
         Cache::flush();
         $this->discoveryOverrides = ['token_endpoint' => 'http://id.example.org/token'];
-        $this->get(route('sso.redirect'))->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->get(route('sso.redirect'))->assertRedirect(route('login'))->assertSessionHasErrors('sso');
 
         Cache::flush();
         $this->discoveryOverrides = ['jwks_uri' => null];
-        $this->get(route('sso.redirect'))->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->get(route('sso.redirect'))->assertRedirect(route('login'))->assertSessionHasErrors('sso');
     }
 
     public function test_a_key_the_provider_started_using_since_the_last_look_is_fetched(): void

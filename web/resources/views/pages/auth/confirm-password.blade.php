@@ -8,10 +8,11 @@
         <x-auth-session-status class="text-center" :status="session('status')" />
 
         {{-- An account that signs in through the provider has no password to type: it proves itself there again. --}}
-        @if (\App\Support\Sso\Sso::enabled() && auth()->user()?->identities()->exists())
+        @php($provider = auth()->user()?->identities()->exists() ? \App\Support\Sso\Sso::forUser(auth()->user()) : null)
+        @if ($provider)
             <div class="flex flex-col gap-3" data-test="sso-confirm">
                 <flux:button variant="primary" class="w-full" :href="route('sso.redirect', ['confirm' => 1])" data-test="sso-confirm-button">
-                    {{ __('Confirm with :name', ['name' => \App\Support\Sso\Sso::name()]) }}
+                    {{ __('Confirm with :name', ['name' => $provider->name]) }}
                 </flux:button>
                 <p class="text-center text-sm text-zinc-600 dark:text-zinc-400">{{ __('You will be asked to sign in there again.') }}</p>
                 @error('password')<p class="text-center text-sm text-fault">{{ $message }}</p>@enderror

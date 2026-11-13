@@ -74,21 +74,21 @@ class ReviewTest extends TestCase
         $this->post(route('logout'));
 
         // Nor is one made for it, confirmed address or not.
-        $this->signInThroughProvider(['sub' => 'okta|someone-new', 'email' => 'owner@corp.example'])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['sub' => 'okta|someone-new', 'email' => 'owner@corp.example'])->assertSessionHasErrors('sso');
         config(['exposehub.sso.require_verified_email' => false]);
-        $this->signInThroughProvider(['sub' => 'okta|someone-new', 'email' => 'Owner@Corp.Example', 'email_verified' => false])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['sub' => 'okta|someone-new', 'email' => 'Owner@Corp.Example', 'email_verified' => false])->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->assertFalse(User::query()->whereRaw('lower(email) = ?', ['owner@corp.example'])->exists());
 
         // And an owner who has an account is not signed in to it by the provider.
         $owner = User::factory()->create(['email' => 'owner@corp.example']);
-        $this->signInThroughProvider(['sub' => 'okta|someone-new', 'email' => 'owner@corp.example', 'email_verified' => true])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['sub' => 'okta|someone-new', 'email' => 'owner@corp.example', 'email_verified' => true])->assertSessionHasErrors('sso');
         $this->assertGuest();
         $this->assertSame(0, $owner->identities()->count());
 
         // An account the provider knows that is later named an owner signs in with its password from then on.
         config(['exposehub.admin_emails' => ['owner@corp.example', 'ada@corp.example']]);
-        $this->signInThroughProvider()->assertSessionHasErrors('email');
+        $this->signInThroughProvider()->assertSessionHasErrors('sso');
         $this->assertGuest();
     }
 
@@ -118,7 +118,7 @@ class ReviewTest extends TestCase
             $this->assertNull($planted->fresh()->email_verified_at);
         }
         // So the colleague's first sign-in still finds an account that never confirmed the address.
-        $this->signInThroughProvider()->assertSessionHasErrors('email');
+        $this->signInThroughProvider()->assertSessionHasErrors('sso');
         $this->assertGuest();
 
         app(AdminActions::class)->verifyEmail($admin, $elsewhere);
@@ -165,7 +165,7 @@ class ReviewTest extends TestCase
         cache()->flush();
         $sent = $this->startSignIn();
         $this->nextIdToken = $withoutKeyId($sent['nonce']);
-        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('email');
+        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('sso');
         $this->assertGuest();
     }
 
@@ -179,7 +179,7 @@ class ReviewTest extends TestCase
 
         // Also when the token is refused.
         $this->post(route('logout'));
-        $this->signInThroughProvider(['iss' => 'https://id.evil.example'])->assertSessionHasErrors('email');
+        $this->signInThroughProvider(['iss' => 'https://id.evil.example'])->assertSessionHasErrors('sso');
         $this->assertSame([0, null], [JWT::$leeway, JWT::$timestamp]);
     }
 }

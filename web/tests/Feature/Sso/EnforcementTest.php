@@ -52,7 +52,7 @@ class EnforcementTest extends TestCase
         $this->post(route('login.store'), ['email' => $member->email, 'password' => 'password']);
         $this->get(route('dashboard', ['current_team' => $member->currentTeam->slug]))
             ->assertRedirect(route('login'))
-            ->assertSessionHas('status', 'Your account signs in with Okta. Use the button for it.');
+            ->assertSessionHas('status', 'Your account signs in with Okta. Use single sign-on on this page.');
         $this->assertGuest();
 
         // A wrong password learns nothing about that.
@@ -150,7 +150,7 @@ class EnforcementTest extends TestCase
 
         // Switched on today: nobody's tunnel closes for it.
         $this->assertSame($everyone, $this->tokensTheServerAccepts());
-        $this->assertTrue(Sso::since()->isToday());
+        $this->assertTrue(Sso::installConnection()->activeSince->isToday());
 
         $this->travel(29)->days();
         $this->assertSame($everyone, $this->tokensTheServerAccepts());

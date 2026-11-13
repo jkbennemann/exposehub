@@ -9,12 +9,32 @@
             <x-team-invitation-alert :invitation="$teamInvitation" :action="__('Log in')" />
         @endif
 
-        {{-- Single sign-on, when the operator has set a provider up. Accounts of its domains get in this way only. --}}
-        @if (\App\Support\Sso\Sso::enabled())
+        {{--
+            Single sign-on. The install's own provider gets a button. A team's provider is found
+            by the address: which teams have one is nobody else's business. Accounts of a
+            provider's domains get in this way only.
+        --}}
+        @php
+            $providers = \App\Support\Sso\Sso::connections();
+            $own = $providers->first(fn ($provider) => $provider->teamId === null);
+            $ofTeams = $providers->contains(fn ($provider) => $provider->teamId !== null);
+        @endphp
+        @if ($providers->isNotEmpty())
             <div class="flex flex-col gap-3" data-test="sso-sign-in">
-                <flux:button variant="primary" class="w-full" :href="route('sso.redirect')" data-test="sso-button">
-                    {{ __('Sign in with :name', ['name' => \App\Support\Sso\Sso::name()]) }}
-                </flux:button>
+                @if ($own)
+                    <flux:button variant="primary" class="w-full" :href="route('sso.redirect')" data-test="sso-button">
+                        {{ __('Sign in with :name', ['name' => $own->name]) }}
+                    </flux:button>
+                @endif
+                @if ($ofTeams)
+                    <form method="GET" action="{{ route('sso.redirect') }}" class="flex flex-col gap-3" data-test="sso-by-address">
+                        <flux:input name="address" type="email" :label="__('Work email address')" required autocomplete="email" placeholder="you@company.example" />
+                        <flux:button type="submit" :variant="$own ? 'filled' : 'primary'" class="w-full" data-test="sso-address-button">
+                            {{ __('Continue with single sign-on') }}
+                        </flux:button>
+                    </form>
+                @endif
+                @error('sso')<p class="text-center text-sm text-fault" role="alert" data-test="sso-error">{{ $message }}</p>@enderror
                 <p class="text-center text-sm text-zinc-600 dark:text-zinc-400">{{ __('For accounts your organisation signs in. Everyone else uses a passkey or password below.') }}</p>
             </div>
             <flux:separator :text="__('or')" />

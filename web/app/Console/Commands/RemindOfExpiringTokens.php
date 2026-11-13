@@ -20,27 +20,22 @@ class RemindOfExpiringTokens extends Command
 
     public function handle(): int
     {
-        if (! Sso::enabled()) {
+        if (Sso::installConnection() === null) {
             // Switched on again later, the days of accounts that never signed in start anew.
-            Sso::forgetSince();
-            $this->info('Single sign-on is off.');
-
-            return self::SUCCESS;
+            Sso::forgetInstallSince();
         }
-        // Notes since when it is on, so the snapshot never has to.
-        Sso::since();
-
+        $connections = Sso::connections();
         $days = Sso::tokenDays();
         $cutoff = Sso::tokenCutoff();
-        if ($cutoff === null || $days <= self::DAYS_AHEAD) {
-            $this->info('Tokens are not limited, or for too short a time to warn ahead.');
+        if ($connections->isEmpty() || $cutoff === null || $days <= self::DAYS_AHEAD) {
+            $this->info('Single sign-on is off, or tokens are not limited, or for too short a time to warn ahead.');
 
             return self::SUCCESS;
         }
 
         $reminded = 0;
         UserIdentity::query()
-            ->where('issuer', Sso::issuer())
+            ->whereIn('issuer', $connections->pluck('issuer')->unique()->all())
             ->where('signed_in_at', '>=', $cutoff)
             ->where('signed_in_at', '<', $cutoff->copy()->addDays(self::DAYS_AHEAD))
             // Once per sign-in: a later sign-in clears the note.
@@ -52,7 +47,7 @@ class RemindOfExpiringTokens extends Command
                         continue;
                     }
                     $left = max(1, (int) ceil(now()->diffInHours($identity->signed_in_at->copy()->addDays($days), false) / 24));
-                    AccountMail::send($identity->user, AccountNotice::tokensExpiring(Sso::name(), $left));
+                    AccountMail::send($identity->user, AccountNotice::tokensExpiring(Sso::forUser($identity->user)->name ?? __('single sign-on'), $left));
                     $identity->update(['reminded_at' => now()]);
                     $reminded++;
                 }
