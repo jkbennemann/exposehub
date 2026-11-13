@@ -157,6 +157,10 @@ curl http://demo.localhost:8080/
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the tests and the licence your contribution comes in under, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) how we treat each other.
 
+## Support
+
+If exposehub is useful to you, you can support its development at [buymeacoffee.com/jkbennemann](https://buymeacoffee.com/jkbennemann).
+
 ## Layout
 
 - `tunnel/` — Go module with the server (`cmd/exposehub-server`) and the agent (`cmd/exposehub`)
