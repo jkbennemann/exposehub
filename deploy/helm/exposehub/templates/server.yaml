@@ -85,6 +85,13 @@ spec:
               value: {{ .Values.server.controlPlaneMaxStale | toString | quote }}
             - name: EXPOSEHUB_GRACE_PERIOD
               value: {{ .Values.server.gracePeriod | quote }}
+            # Limits on the tunnels of the dashboard's demo account.
+            - name: EXPOSEHUB_DEMO_MAX_TUNNELS
+              value: {{ .Values.server.demoMaxTunnels | int | quote }}
+            - name: EXPOSEHUB_DEMO_REQUESTS_PER_MINUTE
+              value: {{ .Values.server.demoRequestsPerMinute | int | quote }}
+            - name: EXPOSEHUB_DEMO_MEGABYTES_PER_MINUTE
+              value: {{ .Values.server.demoMegabytesPerMinute | int | quote }}
             - name: EXPOSEHUB_LOG_LEVEL
               value: {{ .Values.server.logLevel | quote }}
             - name: EXPOSEHUB_LOG_FORMAT

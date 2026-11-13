@@ -154,6 +154,8 @@ type snapshotToken struct {
 	Hash   string `json:"hash"`
 	TeamID int64  `json:"team_id"`
 	Team   string `json:"team"`
+	// Demo is true for tokens of the demo account.
+	Demo bool `json:"demo"`
 }
 
 // NewControlPlane returns a mirror primed from the cache file, if there is one.
@@ -424,6 +426,7 @@ func (c *ControlPlane) apply(body []byte) error {
 			Account: teamAccount(t.TeamID),
 			TokenID: id,
 			Label:   t.Team,
+			Demo:    t.Demo,
 			issuer:  c,
 		}
 		ids[id] = true

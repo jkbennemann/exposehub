@@ -95,6 +95,12 @@ func (s *Server) startLog(sess *session, host string, r *http.Request) *logRecor
 	if mode != LogRequests && mode != LogBodies {
 		return nil
 	}
+	path := maskQuery(r.URL)
+	if sess.who.Demo && r.URL.Path == demoContinuePath {
+		// "to" carries the address the visitor first asked for, query and
+		// all, where the masking of secret-looking parameters does not look.
+		path = demoContinuePath + "?to=[redacted]&sig=[redacted]"
+	}
 	rec := &logRecord{
 		start:   time.Now(),
 		bodies:  mode == LogBodies,
@@ -103,7 +109,7 @@ func (s *Server) startLog(sess *session, host string, r *http.Request) *logRecor
 			TokenID: sess.who.TokenID,
 			Host:    host,
 			Method:  r.Method,
-			Path:    truncateUTF8(maskQuery(r.URL), logMaxPath),
+			Path:    truncateUTF8(path, logMaxPath),
 			Remote:  shortenIP(s.clientIP(r)),
 			Started: time.Now().UTC(),
 		},

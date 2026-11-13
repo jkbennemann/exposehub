@@ -13,6 +13,7 @@ var (
 	errHostTaken    = errors.New("is in use by another account")
 	errHostBusy     = errors.New("is in use by another agent of your team")
 	errHostReserved = errors.New("is reserved")
+	errDemoOff      = errors.New("this server opens no demo tunnels")
 )
 
 // hostReq is one requested hostname: either a label under a tunnel domain,
@@ -38,6 +39,8 @@ type entry struct {
 	holder    string
 	sess      *session
 	releaseAt time.Time
+	// demo marks the tunnel of a demo token, which counts towards demoMax.
+	demo bool
 }
 
 func (e *entry) expired(now time.Time) bool {
@@ -48,6 +51,8 @@ func (e *entry) expired(now time.Time) bool {
 type registry struct {
 	grace    time.Duration
 	reserved map[string]bool
+	// demoMax is how many tunnels of demo tokens may be open at once.
+	demoMax int
 
 	mu    sync.RWMutex
 	hosts map[string]*entry
@@ -66,6 +71,11 @@ func newRegistry(grace time.Duration, reserved ...string) *registry {
 // reconnect after a network drop looks like; the sessions that lose a name
 // are returned so the caller can close them. A name a teammate is serving is
 // refused, and one whose agent is away can be picked up by anyone on the team.
+//
+// A demo token gets a random name whatever it asks for, except the name it
+// holds already, which is what its agent asks for when it reconnects. It has
+// one tunnel: sessions of the same token on other names are displaced too.
+// And all demo tokens together have demoMax tunnels.
 func (r *registry) claim(who Principal, sess *session, reqs []hostReq, now time.Time) (hosts []string, displaced []*session, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -73,14 +83,18 @@ func (r *registry) claim(who Principal, sess *session, reqs []hostReq, now time.
 	seen := map[string]bool{}
 	for _, q := range reqs {
 		var host string
-		if q.host == "" && q.sub == "" {
+		sub := q.sub
+		if who.Demo && sub != "" && !r.heldLocked(sub+"."+q.domain, who, now) {
+			sub = ""
+		}
+		if q.host == "" && sub == "" {
 			if host, err = r.randomHostLocked(q.domain, seen, now); err != nil {
 				return nil, nil, err
 			}
 		} else {
 			host = q.host
 			if host == "" {
-				host = q.sub + "." + q.domain
+				host = sub + "." + q.domain
 			}
 			switch e := r.hosts[host]; {
 			case r.reserved[host]:
@@ -97,13 +111,53 @@ func (r *registry) claim(who Principal, sess *session, reqs []hostReq, now time.
 		hosts = append(hosts, host)
 	}
 
+	if who.Demo {
+		if r.demoMax <= 0 {
+			return nil, nil, errDemoOff
+		}
+		var others []*entry
+		open := 0
+		for host, e := range r.hosts {
+			switch {
+			case !e.demo || e.sess == nil:
+			case e.holder != who.TokenID:
+				open++
+			case !seen[host]:
+				others = append(others, e)
+			}
+		}
+		// The token's own tunnel does not count: an agent coming back after
+		// a network drop must get in while its old session is still open.
+		if open >= r.demoMax {
+			return nil, nil, fmt.Errorf("the demo is full right now (%d tunnels at once); try again in a few minutes", r.demoMax)
+		}
+		for _, e := range others {
+			displaced = append(displaced, e.sess)
+			// The name is free at once; nobody is coming back for it.
+			e.sess, e.releaseAt = nil, time.Time{}
+		}
+	}
+
 	for _, host := range hosts {
 		if e := r.hosts[host]; e != nil && e.sess != nil {
 			displaced = append(displaced, e.sess)
 		}
-		r.hosts[host] = &entry{owner: who.Account, holder: who.TokenID, sess: sess}
+		r.hosts[host] = &entry{owner: who.Account, holder: who.TokenID, sess: sess, demo: who.Demo}
 	}
 	return hosts, displaced, nil
+}
+
+// holds reports whether who's token holds host: its agent serves it, or did
+// until a moment ago.
+func (r *registry) holds(host string, who Principal, now time.Time) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.heldLocked(host, who, now)
+}
+
+func (r *registry) heldLocked(host string, who Principal, now time.Time) bool {
+	e := r.hosts[host]
+	return e != nil && !e.expired(now) && e.owner == who.Account && e.holder == who.TokenID
 }
 
 // release marks the hostnames sess still holds as disconnected and starts

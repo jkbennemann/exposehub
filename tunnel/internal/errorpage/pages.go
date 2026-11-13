@@ -1,6 +1,9 @@
 package errorpage
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+)
 
 // The visitor of a tunnel address is often not the person who opened it: a
 // client, a phone, a payment provider. The texts speak to them first and give
@@ -100,5 +103,34 @@ func UnknownTunnel() Page {
 		Title:  "This tunnel is not ready",
 		Text:   "The computer behind this address does not serve it at the moment. Reload the page in a moment.",
 		Plain:  "exposehub: the agent does not know this tunnel",
+	}
+}
+
+// DemoNotice is what a browser gets before the first page of a demo tunnel.
+// Anyone can open such a tunnel without an account, so the visitor is told
+// that the tunnel server does not know who is behind the address. service is
+// the host of the install, continueURL where the button leads.
+func DemoNotice(service, continueURL string) Page {
+	return Page{
+		Status:    http.StatusOK,
+		Cable:     Open,
+		Title:     "This is a demo tunnel",
+		Text:      "Someone opened this address with the demo of " + service + ", without an account. The page behind it is theirs, and " + service + " does not know who they are. Do not enter passwords or payment details unless you know who runs it.",
+		Action:    "Continue to the page",
+		ActionURL: continueURL,
+		Footer:    "Demo tunnel",
+		Plain:     "exposehub: this is a demo tunnel, opened by someone without an account; do not enter passwords or payment details unless you know who runs it. Open " + continueURL + " on this address to continue",
+	}
+}
+
+// DemoLimit is the answer once a demo tunnel has had more requests than it
+// gets a minute.
+func DemoLimit(perMinute int) Page {
+	return Page{
+		Status: http.StatusTooManyRequests,
+		Cable:  Locked,
+		Title:  "This demo tunnel is at its limit",
+		Text:   fmt.Sprintf("A demo tunnel answers up to %d requests a minute, and this one has had more. Wait a moment and reload the page.", perMinute),
+		Plain:  fmt.Sprintf("exposehub: this demo tunnel is limited to %d requests a minute; try again in a moment", perMinute),
 	}
 }

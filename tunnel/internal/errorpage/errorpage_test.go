@@ -16,6 +16,7 @@ func allPages() map[string]Page {
 		"local down":   LocalServiceDown(),
 		"unknown":      UnknownTunnel(),
 		"network":      NetworkDenied("203.0.113.9"),
+		"demo limit":   DemoLimit(60),
 	}
 }
 
@@ -72,7 +73,7 @@ func TestBrowsersGetAPage(t *testing.T) {
 }
 
 func TestEveryCableStateHasADrawing(t *testing.T) {
-	marks := map[Cable]string{Gap: `class="returning"`, Loose: `class="socket"`, Fault: `class="broken"`, Locked: `class="lock"`}
+	marks := map[Cable]string{Gap: `class="returning"`, Loose: `class="socket"`, Fault: `class="broken"`, Locked: `class="lock"`, Open: `class="stranger"`}
 	for cable, mark := range marks {
 		body := serve(Page{Status: 502, Cable: cable, Title: "t", Plain: "p"}, http.MethodGet, "text/html", "a.example").Body.String()
 		if !strings.Contains(body, mark) {
@@ -108,5 +109,34 @@ func TestOnlyGetRequestsRetryByThemselves(t *testing.T) {
 	}
 	if strings.Contains(serve(PasswordRequired(), http.MethodGet, "text/html", "a.example").Body.String(), `http-equiv="refresh"`) {
 		t.Error("password page refreshes")
+	}
+}
+
+func TestTheDemoNoticeNamesTheInstallAndLinksOnlyToItsOwnHost(t *testing.T) {
+	p := DemoNotice("connect.example.eu", `/.exposehub/demo-continue?to=%2Fa%3Fb%3D1&t=17.abc"><script>`)
+	w := serve(p, http.MethodGet, "text/html", "abc.example.eu")
+	body := w.Body.String()
+	if w.Code != http.StatusOK {
+		t.Errorf("status %d, want 200: the notice is not an error", w.Code)
+	}
+	for _, want := range []string{
+		"<h1>This is a demo tunnel</h1>", "connect.example.eu", "without an account", "passwords or payment details",
+		`href="/.exposehub/demo-continue?to=%2Fa%3Fb%3D1&amp;t=17.abc%22%3e%3cscript%3e"`, ">Continue to the page</a>",
+		"<span>Demo tunnel</span>", `class="stranger"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the notice lacks %q", want)
+		}
+	}
+	if strings.Contains(body, "<script") || strings.Contains(body, "200 OK") {
+		t.Errorf("the notice carries a script or a status line:\n%s", body)
+	}
+	if n := strings.Count(body, "href="); n != 1 {
+		t.Errorf("the notice has %d links, want the one that continues", n)
+	}
+	// Whoever asks without wanting a page still learns what this is.
+	plain := serve(p, http.MethodGet, "", "abc.example.eu").Body.String()
+	if !strings.Contains(plain, "demo tunnel") || !strings.Contains(plain, "/.exposehub/demo-continue") {
+		t.Errorf("plain notice %q", plain)
 	}
 }

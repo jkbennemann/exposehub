@@ -4,6 +4,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- A demo that needs no account. With `EXPOSEHUB_DEMO=true` the landing page offers "Try the demo": one click signs a visitor in, into a demo team with sample data, where they can create tokens and open real tunnels. Each visitor sees only their own tokens, tunnels and request logs. Every 30 minutes the demo team, its visitors and what they made are deleted and the sample data is laid out again. Off by default; [docs/admin.md](docs/admin.md) says what to consider before switching it on.
+- The tunnel server holds tunnels of the demo to tighter rules than a team's: random addresses only, one tunnel per token, a cap on how many are open at once, a limit on requests and on data a minute, no bodies in the request log, and a notice that browsers see before the first page. New settings `EXPOSEHUB_DEMO_MAX_TUNNELS`, `EXPOSEHUB_DEMO_REQUESTS_PER_MINUTE` and `EXPOSEHUB_DEMO_MEGABYTES_PER_MINUTE`; see "Demo tunnels" in [docs/server.md](docs/server.md).
+
 ## [0.1.2] - 2026-11-13
 
 ### Changed

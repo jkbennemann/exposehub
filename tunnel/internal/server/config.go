@@ -64,6 +64,17 @@ type Config struct {
 	// GracePeriod is how long a subdomain stays reserved for its owner after
 	// the agent disconnects.
 	GracePeriod time.Duration
+	// DemoMaxTunnels is how many tunnels of demo tokens may be open at once
+	// on this server. Demo tokens belong to the dashboard's demo account,
+	// which anyone can use without signing up. Zero means the default of 20;
+	// a negative value opens none.
+	DemoMaxTunnels int
+	// DemoRequestsPerMinute is how many requests each demo tunnel answers a
+	// minute. Zero means the default of 60.
+	DemoRequestsPerMinute int
+	// DemoMegabytesPerMinute is how much data each demo tunnel carries a
+	// minute, both directions together. Zero means the default of 5.
+	DemoMegabytesPerMinute int
 }
 
 // ConfigFromEnv reads the configuration from EXPOSEHUB_* variables.
@@ -145,6 +156,30 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		}
 		cfg.GracePeriod = d
 	}
+	if v := getenv("EXPOSEHUB_DEMO_MAX_TUNNELS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return Config{}, fmt.Errorf("EXPOSEHUB_DEMO_MAX_TUNNELS: %q is not a number of tunnels, or 0 for none", v)
+		}
+		cfg.DemoMaxTunnels = n
+		if n == 0 {
+			cfg.DemoMaxTunnels = -1
+		}
+	}
+	if v := getenv("EXPOSEHUB_DEMO_REQUESTS_PER_MINUTE"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return Config{}, fmt.Errorf("EXPOSEHUB_DEMO_REQUESTS_PER_MINUTE: %q is not a positive number", v)
+		}
+		cfg.DemoRequestsPerMinute = n
+	}
+	if v := getenv("EXPOSEHUB_DEMO_MEGABYTES_PER_MINUTE"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 1<<20 {
+			return Config{}, fmt.Errorf("EXPOSEHUB_DEMO_MEGABYTES_PER_MINUTE: %q is not a positive number of megabytes", v)
+		}
+		cfg.DemoMegabytesPerMinute = n
+	}
 	return cfg, cfg.normalize()
 }
 
@@ -197,7 +232,21 @@ func (c *Config) normalize() error {
 	if c.TLSAskNameWindow <= 0 {
 		c.TLSAskNameWindow = 7 * 24 * time.Hour
 	}
+	if c.DemoMaxTunnels == 0 {
+		c.DemoMaxTunnels = 20
+	}
+	if c.DemoRequestsPerMinute <= 0 {
+		c.DemoRequestsPerMinute = 60
+	}
+	if c.DemoMegabytesPerMinute <= 0 {
+		c.DemoMegabytesPerMinute = 5
+	}
 	return nil
+}
+
+// demoTunnels is how many demo tunnels may be open at once.
+func (c *Config) demoTunnels() int {
+	return max(0, c.DemoMaxTunnels)
 }
 
 func (c *Config) hasDomain(domain string) bool {

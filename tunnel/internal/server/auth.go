@@ -23,6 +23,9 @@ type Principal struct {
 	TokenID string
 	// Label names the account in logs.
 	Label string
+	// Demo marks a token of the dashboard's demo account, which anyone can
+	// use without signing up. Its tunnels get the limits in demo.go.
+	Demo bool
 	// issuer is the Authenticator that vouched for the agent.
 	issuer Authenticator
 }

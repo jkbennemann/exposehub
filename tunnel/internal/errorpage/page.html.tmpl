@@ -57,6 +57,7 @@ main {
 .cable .lock .body { fill: var(--cable); }
 .cable .lock .shackle { fill: none; stroke: var(--cable); stroke-width: 3.5; stroke-linecap: round; }
 .cable .lock .hole { fill: var(--ink); }
+.cable .stranger { fill: var(--paper); stroke: var(--cable); stroke-width: 3; }
 .cable .returning { fill: none; stroke: var(--cable); stroke-width: 3; animation: return 1.6s ease-in-out infinite; }
 @keyframes return { 50% { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .cable .returning { animation: none; } }
@@ -101,6 +102,17 @@ p { margin: 1rem 0 0; max-width: 34rem; }
     color: var(--muted);
     overflow-wrap: anywhere;
 }
+.action {
+    display: inline-block;
+    margin-top: .5rem;
+    padding: .625rem 1.125rem;
+    border-radius: .375rem;
+    background: var(--cable);
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+.action:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 footer {
     display: flex;
     align-items: center;
@@ -132,6 +144,10 @@ footer svg { width: 1.75rem; height: auto; }
         <circle class="jack" cx="12" cy="20" r="10"/>
         <circle class="broken" cx="548" cy="20" r="10"/>
         <path class="cross" d="M543 15l10 10M553 15l-10 10"/>
+    {{- else if eq .Cable "open"}}
+        <path class="wire" d="M20 20H536"/>
+        <circle class="jack" cx="12" cy="20" r="10"/>
+        <circle class="stranger" cx="548" cy="20" r="9"/>
     {{- else}}
         <path class="wire" d="M20 20H540"/>
         <circle class="jack" cx="12" cy="20" r="10"/>
@@ -156,9 +172,12 @@ footer svg { width: 1.75rem; height: auto; }
     {{- if .Detail}}
     <p class="detail">{{.Detail}}</p>
     {{- end}}
+    {{- if .ActionURL}}
+    <p><a class="action" href="{{.ActionURL}}">{{.Action}}</a></p>
+    {{- end}}
 
     <footer>
-        <span>{{.Status}} {{.StatusTx}}</span>
+        <span>{{if .Footer}}{{.Footer}}{{else}}{{.Status}} {{.StatusTx}}{{end}}</span>
         <svg viewBox="0 0 32 16" aria-label="exposehub" role="img"><path d="M6 8h20" stroke="#ffc531" stroke-width="3.5" stroke-linecap="round"/><circle cx="5" cy="8" r="4" fill="#ffc531"/><circle cx="27" cy="8" r="4" fill="#ffc531"/></svg>
     </footer>
 </main>

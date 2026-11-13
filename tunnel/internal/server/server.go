@@ -57,6 +57,12 @@ type Server struct {
 	sessions map[*session]struct{}
 	// perToken counts the sessions of each token, from authentication on.
 	perToken map[string]int
+	// allowances holds what each demo token may still use, by token id.
+	allowances map[string]*allowance
+	// demoKey signs the proof that a browser has seen a demo tunnel's
+	// notice. It lives as long as the process: after a restart browsers see
+	// the notice once more.
+	demoKey [32]byte
 }
 
 // New validates cfg and returns a server that is ready to serve.
@@ -71,16 +77,22 @@ func New(cfg Config, auth Authenticator, log *slog.Logger) (*Server, error) {
 			return nil, fmt.Errorf("agent downloads: %w", err)
 		}
 	}
-	return &Server{
-		agents:   agents,
-		cfg:      cfg,
-		auth:     auth,
-		log:      log,
-		reg:      newRegistry(cfg.GracePeriod, cfg.AgentHost),
-		certs:    newCertBudget(cfg.TLSAskNameLimit, cfg.TLSAskTotalLimit, cfg.TLSAskNameWindow),
-		sessions: map[*session]struct{}{},
-		perToken: map[string]int{},
-	}, nil
+	s := &Server{
+		agents:     agents,
+		cfg:        cfg,
+		auth:       auth,
+		log:        log,
+		reg:        newRegistry(cfg.GracePeriod, cfg.AgentHost),
+		certs:      newCertBudget(cfg.TLSAskNameLimit, cfg.TLSAskTotalLimit, cfg.TLSAskNameWindow),
+		sessions:   map[*session]struct{}{},
+		perToken:   map[string]int{},
+		allowances: map[string]*allowance{},
+	}
+	s.reg.demoMax = cfg.demoTunnels()
+	if _, err := rand.Read(s.demoKey[:]); err != nil {
+		return nil, fmt.Errorf("making the key for demo notices: %w", err)
+	}
+	return s, nil
 }
 
 // Run serves until ctx is cancelled, then closes every tunnel and returns.
@@ -103,6 +115,7 @@ func (s *Server) Run(ctx context.Context) error {
 				return
 			case now := <-tick.C:
 				s.reg.sweep(now)
+				s.sweepAllowances(now)
 			}
 		}
 	}()
@@ -218,8 +231,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if rec != nil {
 			w = rec.wrap(w, r)
 		}
-		// Networks first: a visitor from elsewhere is not even asked for a password.
-		if s.reachable(sess, host, w, r) && sess.admits(host, w, r) {
+		if s.admit(sess, host, w, r) {
+			if sess.who.Demo {
+				w = s.meter(sess, w, r)
+			}
 			sess.proxy.ServeHTTP(w, r)
 		}
 		if rec != nil {
@@ -279,11 +294,15 @@ func (s *Server) serveAgent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "exposehub: invalid agent token", http.StatusUnauthorized)
 		return
 	}
-	if !s.holdSession(principal.TokenID) {
+	sessionLimit := maxSessionsPerToken
+	if principal.Demo {
+		sessionLimit = maxSessionsPerDemoToken
+	}
+	if !s.holdSession(principal.TokenID, sessionLimit) {
 		// The agent retries this later, by when sessions of a crashed or
 		// reconnecting agent have ended.
 		w.Header().Set("Retry-After", "30")
-		http.Error(w, fmt.Sprintf("exposehub: this token already has %d sessions open", maxSessionsPerToken), http.StatusTooManyRequests)
+		http.Error(w, fmt.Sprintf("exposehub: this token already has %d sessions open", sessionLimit), http.StatusTooManyRequests)
 		return
 	}
 	defer s.releaseSession(principal.TokenID)
@@ -340,7 +359,14 @@ func (s *Server) serveAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := newSession(principal, mux, ctrl, s.rewrite, s.scopeCookies, log)
+	modify := s.scopeCookies
+	if principal.Demo {
+		modify = s.demoResponse
+	}
+	sess := newSession(principal, mux, ctrl, s.rewrite, modify, log)
+	if principal.Demo {
+		sess.limit = s.demoAllowance(principal.TokenID, time.Now())
+	}
 	sess.id = newSessionID()
 	sess.agentVersion = cleanAgentVersion(hello.AgentVersion)
 	sess.connectedAt = time.Now()
@@ -355,8 +381,12 @@ func (s *Server) serveAgent(w http.ResponseWriter, r *http.Request) {
 		s.track(sess, false)
 		sess.close()
 	}()
+	takenOver := "another agent with the same token opened the same address"
+	if principal.Demo {
+		takenOver = "another agent connected with the same demo token, and a demo token has one tunnel"
+	}
 	for _, old := range displaced {
-		old.goodbye("another agent with the same token opened the same address", true)
+		old.goodbye(takenOver, true)
 	}
 
 	welcome := proto.Welcome{}
@@ -375,6 +405,11 @@ func (s *Server) serveAgent(w http.ResponseWriter, r *http.Request) {
 		logging := LogOff
 		if _, fromDashboard := principal.issuer.(*ControlPlane); fromDashboard && s.shipper != nil {
 			logging = reqs[i].log
+		}
+		if principal.Demo && logging == LogBodies {
+			// Anyone can open a demo tunnel, and what its visitors send is
+			// not theirs to keep.
+			logging = LogRequests
 		}
 		sess.logMode[host] = logging
 		if reqs[i].allow != nil {
@@ -428,10 +463,16 @@ func (s *Server) hostRequests(hello proto.Hello, who Principal) ([]hostReq, erro
 	if n := len(hello.Tunnels); n == 0 || n > maxTunnelsPerSession {
 		return nil, fmt.Errorf("an agent may open between 1 and %d tunnels, not %d", maxTunnelsPerSession, n)
 	}
+	if who.Demo && len(hello.Tunnels) > 1 {
+		return nil, errors.New("the demo opens one tunnel per token; start a single tunnel")
+	}
 	reqs := make([]hostReq, 0, len(hello.Tunnels))
 	for _, t := range hello.Tunnels {
 		if t.Proto != proto.ProtoHTTP {
 			return nil, fmt.Errorf("tunnel protocol %q is not supported", t.Proto)
+		}
+		if who.Demo && t.Hostname != "" {
+			return nil, errors.New("the demo gives out random addresses only; start the tunnel without --hostname")
 		}
 		auth, err := parseAuth(t.Auth)
 		if err != nil {
@@ -466,6 +507,15 @@ func (s *Server) hostRequests(hello proto.Hello, who Principal) ([]hostReq, erro
 		sub := strings.ToLower(t.Subdomain)
 		if sub != "" && !validLabel(sub) {
 			return nil, fmt.Errorf("%q is not a valid subdomain; use letters, digits and hyphens", t.Subdomain)
+		}
+		if who.Demo && sub != "" && !s.reg.holds(sub+"."+domain, who, time.Now()) {
+			// An agent asks for the address it had when it reconnects. One
+			// that was away for too long has lost it and gets a new one.
+			// Any other name was chosen by a person, which the demo refuses.
+			if !randomShaped(sub) {
+				return nil, errors.New("the demo gives out random addresses only; start the tunnel without --subdomain")
+			}
+			sub = ""
 		}
 		// A name a team saved in the dashboard is that team's, connected or not.
 		if reservations, ok := s.auth.(ReservationAuthority); ok && sub != "" {
@@ -656,11 +706,11 @@ func (s *Server) coversTunnelDomain(domain string) bool {
 	return false
 }
 
-// holdSession counts a new session of a token, unless it has too many.
-func (s *Server) holdSession(tokenID string) bool {
+// holdSession counts a new session of a token, unless it has limit of them.
+func (s *Server) holdSession(tokenID string, limit int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.perToken[tokenID] >= maxSessionsPerToken {
+	if s.perToken[tokenID] >= limit {
 		return false
 	}
 	s.perToken[tokenID]++
@@ -698,6 +748,9 @@ type session struct {
 	logMode map[string]string
 	// allow holds, per host, the agent's own limit on who may reach it.
 	allow map[string]*agentAllow
+	// limit is what a demo token's tunnel may use, shared by all sessions of
+	// the token; nil for any other.
+	limit *allowance
 	// id names the session in the status report, so that the dashboard can
 	// ask for this one to be closed. It is random and means nothing else.
 	id string

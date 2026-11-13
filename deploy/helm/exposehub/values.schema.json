@@ -36,6 +36,21 @@
           "enum": ["text", "json"]
         },
         "requestLogs": { "type": "boolean" },
+        "demoMaxTunnels": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many tunnels of the demo account may be open at once. 0 opens none"
+        },
+        "demoRequestsPerMinute": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many requests each demo tunnel answers a minute"
+        },
+        "demoMegabytesPerMinute": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many megabytes each demo tunnel carries a minute, both directions together"
+        },
         "controlPlaneMaxStale": {
           "type": ["string", "integer"],
           "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
@@ -71,6 +86,17 @@
           }
         },
         "logRetentionDays": { "type": "integer", "minimum": 1 },
+        "demo": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "resetMinutes": { "type": "integer", "minimum": 1 },
+            "maxVisitors": { "type": "integer", "minimum": 0 },
+            "visitorsPerIpPerHour": { "type": "integer", "minimum": 1 },
+            "tokensPerVisitor": { "type": "integer", "minimum": 0 }
+          }
+        },
         "limits": {
           "type": "object",
           "additionalProperties": false,

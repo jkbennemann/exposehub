@@ -52,6 +52,16 @@ server:
 
   # How long a subdomain stays reserved for its owner after the agent drops.
   gracePeriod: 1m
+  # Tunnels of the dashboard's demo account, which visitors use without
+  # signing up. They get random addresses only, one per token, and browsers
+  # see a notice before the first page. demoMaxTunnels is how many may be open
+  # at once (0 for none), demoRequestsPerMinute how many requests each
+  # answers a minute. Both only matter while the dashboard's demo is on.
+  demoMaxTunnels: 20
+  demoRequestsPerMinute: 60
+  # How much data each demo tunnel carries a minute, both directions
+  # together, in megabytes. More waits for the next minute's share.
+  demoMegabytesPerMinute: 5
   # How long the server keeps using the dashboard's token list when it cannot
   # refresh it. After that it refuses dashboard tokens and closes their
   # tunnels until the dashboard answers again, so a revoked token cannot keep
@@ -150,6 +160,22 @@ web:
 
   # How many days the dashboard keeps request logs.
   logRetentionDays: 7
+
+  # The demo: "Try the demo" on the landing page signs a visitor in without an
+  # account, into a team with sample data, where they can open real tunnels.
+  # All of it is deleted every resetMinutes. Demo tunnels are public addresses
+  # nobody answers for; read docs/admin.md before switching this on. The
+  # tunnel server's side is server.demoMaxTunnels, demoRequestsPerMinute and
+  # demoMegabytesPerMinute.
+  demo:
+    enabled: false
+    resetMinutes: 30
+    # Visitors the demo holds until its next reset.
+    maxVisitors: 200
+    # How often one address may start the demo in an hour.
+    visitorsPerIpPerHour: 6
+    # Tokens, and so tunnels, one visitor can have.
+    tokensPerVisitor: 2
 
   # How much one person or team may set up. 0 allows none.
   limits:

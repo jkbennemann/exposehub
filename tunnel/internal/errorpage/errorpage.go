@@ -8,6 +8,9 @@
 // The page is served on tunnel addresses and on domains of the agents' users,
 // so it is fully self-contained: no fonts, scripts or images are loaded from
 // anywhere, and its Content-Security-Policy forbids them.
+//
+// One page is not an error: the notice a browser gets before the first page
+// of a demo tunnel. It shares the look, and is the only one with a link.
 package errorpage
 
 import (
@@ -31,6 +34,9 @@ const (
 	Fault Cable = "fault"
 	// Locked: a lock sits on the cable (password protected).
 	Locked Cable = "locked"
+	// Open: the cable is whole, and the far end is drawn as a ring: someone
+	// the tunnel server cannot vouch for (the notice on a demo tunnel).
+	Open Cable = "open"
 )
 
 // Page describes one answer.
@@ -47,6 +53,13 @@ type Page struct {
 	// Retry, if positive, makes the browser load the address again after
 	// that many seconds. Only applied to GET requests.
 	Retry int
+	// Action and ActionURL are an optional link the visitor can follow from
+	// the page, drawn as a button. ActionURL is a path on the same host.
+	Action    string
+	ActionURL string
+	// Footer replaces the status line at the foot of the page, for a page
+	// that is not an error.
+	Footer string
 	// Plain is the text non-browsers get, without the trailing newline.
 	Plain string
 }

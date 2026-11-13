@@ -6,12 +6,21 @@ server:
   agentHost: agents.example.com
   trustedProxies: 10.42.0.0/16
   controlPlaneMaxStale: "0"
+  demoMaxTunnels: 0
+  demoRequestsPerMinute: 120
+  demoMegabytesPerMinute: 2
   extraEnv:
     - name: EXPOSEHUB_CUSTOM_DOMAIN_HEADERS
       value: X-Robots-Tag=noindex
 web:
   host: dash.example.com
   sourceUrl: https://git.example.com/fork/exposehub
+  demo:
+    enabled: true
+    resetMinutes: 15
+    maxVisitors: 50
+    visitorsPerIpPerHour: 3
+    tokensPerVisitor: 1
   limits:
     teamsPerUser: 3
     savedAddressesPerUser: 10
