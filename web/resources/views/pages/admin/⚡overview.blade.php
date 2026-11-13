@@ -57,7 +57,7 @@ new #[Title('Admin')] #[RequiresAdmin] class extends Component {
     public function totals(): array
     {
         return [
-            [User::count(), __('people')],
+            [User::where('is_demo', false)->count(), __('people')],
             [Team::where('is_personal', false)->count(), __('shared teams')],
             [AgentToken::usable()->count(), __('active agent tokens')],
             [CustomDomain::verified()->count(), __('connected domains')],

@@ -34,7 +34,8 @@ final class AccessSnapshot
     public static function reserved(): Generator
     {
         $addresses = SavedAddress::query()
-            ->whereHas('team')
+            // The demo team's addresses are sample data: its agents get random names only.
+            ->whereHas('team', fn ($team) => $team->where('is_demo', false))
             ->select(['id', 'hostname', 'team_id'])
             ->lazyById(self::CHUNK);
 
@@ -53,6 +54,8 @@ final class AccessSnapshot
     public static function teams(): Generator
     {
         $teams = Team::query()
+            // Rules of the demo team are sample data too, and name addresses no agent can open.
+            ->where('is_demo', false)
             ->where(fn ($q) => $q->where('access', 'networks')
                 ->orWhereHas('accessNetworks')
                 ->orWhereHas('savedAddresses', fn ($a) => $a->where('access', '!=', 'default'))

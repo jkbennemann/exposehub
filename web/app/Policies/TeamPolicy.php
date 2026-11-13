@@ -33,6 +33,10 @@ class TeamPolicy
      */
     public function create(User $user): Response
     {
+        if ($user->is_demo) {
+            return Response::deny(__('Teams are not part of the demo. Create an account to make one.'));
+        }
+
         $limit = (int) config('exposehub.limits.teams_per_user');
 
         return $user->ownedTeams()->count() < $limit

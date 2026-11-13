@@ -58,7 +58,14 @@ new #[Title('Agent tokens')] #[RequiresTeamMembership] class extends Component {
 
     public function createToken(IssueAgentToken $issue): void
     {
-        Gate::authorize('create', [AgentToken::class, $this->team]);
+        $allowed = Gate::inspect('create', [AgentToken::class, $this->team]);
+        // A limit that was reached is said in the form; anything else is refused outright.
+        if ($allowed->denied() && $allowed->message() !== null) {
+            $this->addError('name', $allowed->message());
+
+            return;
+        }
+        $allowed->authorize();
 
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:60'],

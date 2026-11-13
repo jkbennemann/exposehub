@@ -30,6 +30,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $remember_token
  * @property int|null $current_team_id
  * @property bool $is_admin
+ * @property bool $is_demo a visitor of the demo, or the keeper of its sample data
  * @property Carbon|null $suspended_at
  * @property string|null $suspension_reason
  * @property Carbon|null $created_at
@@ -58,6 +59,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_admin' => 'boolean',
+            'is_demo' => 'boolean',
             'suspended_at' => 'datetime',
         ];
     }
@@ -82,11 +84,11 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 
     /**
      * May use the admin area: an owner, or someone an owner made admin.
-     * A suspended account is nothing at all.
+     * A suspended account is nothing at all, and neither is one of the demo.
      */
     public function isAdmin(): bool
     {
-        return ! $this->isSuspended() && ($this->isOwner() || ($this->is_admin && $this->email_verified_at !== null));
+        return ! $this->is_demo && ! $this->isSuspended() && ($this->isOwner() || ($this->is_admin && $this->email_verified_at !== null));
     }
 
     public function isSuspended(): bool

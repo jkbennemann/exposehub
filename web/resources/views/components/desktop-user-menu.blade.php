@@ -20,14 +20,17 @@
             />
             <div class="grid flex-1 text-start text-sm leading-tight">
                 <flux:heading class="truncate">{{ auth()->user()->name }}</flux:heading>
-                <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
+                {{-- A visitor of the demo has an address made up for them; showing it would only confuse. --}}
+                <flux:text class="truncate">{{ auth()->user()->is_demo ? __('No account') : auth()->user()->email }}</flux:text>
             </div>
         </div>
         <flux:menu.separator />
         <flux:menu.radio.group>
-            <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
-                {{ __('Settings') }}
-            </flux:menu.item>
+            @unless (auth()->user()->is_demo)
+                <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
+                    {{ __('Settings') }}
+                </flux:menu.item>
+            @endunless
             @if (auth()->user()->isAdmin())
                 <flux:menu.item :href="route('admin.overview')" icon="shield-check" wire:navigate data-test="admin-menu-link">
                     {{ __('Admin') }}
@@ -42,7 +45,7 @@
                     class="w-full cursor-pointer"
                     data-test="logout-button"
                 >
-                    {{ __('Log out') }}
+                    {{ auth()->user()->is_demo ? __('Leave the demo') : __('Log out') }}
                 </flux:menu.item>
             </form>
         </flux:menu.radio.group>

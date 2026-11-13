@@ -6,15 +6,26 @@ use App\Enums\TeamPermission;
 use App\Models\AgentToken;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 class AgentTokenPolicy
 {
     /**
-     * Every member may create tokens for themselves on a team.
+     * Every member may create tokens for themselves on a team. A visitor of
+     * the demo gets a few: each one can hold a tunnel open.
      */
-    public function create(User $user, Team $team): bool
+    public function create(User $user, Team $team): Response
     {
-        return $user->belongsToTeam($team);
+        if (! $user->belongsToTeam($team)) {
+            return Response::deny();
+        }
+
+        $limit = (int) config('exposehub.demo.tokens_per_visitor');
+        if ($user->is_demo && $team->agentTokens()->where('user_id', $user->id)->whereNull('revoked_at')->count() >= $limit) {
+            return Response::deny(__('The demo gives each visitor :n tokens. Revoke one to make another.', ['n' => $limit]));
+        }
+
+        return Response::allow();
     }
 
     /**

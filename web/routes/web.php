@@ -1,11 +1,15 @@
 <?php
 
+use App\Http\Controllers\EnterDemo;
 use App\Http\Middleware\EnsureTeamMembership;
 use App\Support\LegalPage;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 Route::view('docs', 'docs')->name('docs');
+
+// The demo: one click signs a visitor in without an account. 404 while EXPOSEHUB_DEMO is off.
+Route::post('demo', EnterDemo::class)->middleware(['guest', 'throttle:20,1'])->name('demo.enter');
 
 // The operator's imprint and privacy notice; 404 until the operator provides the text.
 // Literal paths, not a parameter, so that no team can be given one of these names.

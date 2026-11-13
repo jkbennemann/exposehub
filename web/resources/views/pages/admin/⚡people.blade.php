@@ -28,7 +28,7 @@ new #[Title('People')] #[RequiresAdmin] class extends Component {
 
     public function setFilter(string $filter): void
     {
-        $this->filter = in_array($filter, ['all', 'admins', 'suspended', 'unverified'], true) ? $filter : 'all';
+        $this->filter = in_array($filter, ['all', 'admins', 'suspended', 'unverified', 'demo'], true) ? $filter : 'all';
         $this->resetPage();
     }
 
@@ -39,6 +39,8 @@ new #[Title('People')] #[RequiresAdmin] class extends Component {
         $sessions = config('session.driver') === 'database' ? config('session.table', 'sessions') : null;
 
         return User::query()
+            // Visitors of the demo come and go by the dozen; they have a list of their own.
+            ->where('is_demo', $this->filter === 'demo')
             ->when(trim($this->q) !== '', function (Builder $query) {
                 $term = '%'.str_replace(['%', '_'], ['\%', '\_'], mb_strtolower(trim($this->q))).'%';
                 $query->where(fn (Builder $q) => $q->whereRaw('lower(name) like ?', [$term])->orWhereRaw('lower(email) like ?', [$term]));
@@ -63,10 +65,11 @@ new #[Title('People')] #[RequiresAdmin] class extends Component {
         $owners = config('exposehub.admin_emails');
 
         return [
-            'all' => User::count(),
+            'all' => User::where('is_demo', false)->count(),
+            'demo' => User::where('is_demo', true)->count(),
             'admins' => User::where(fn (Builder $q) => $q->where('is_admin', true)->orWhereIn(DB::raw('lower(email)'), $owners ?: ['']))->count(),
-            'suspended' => User::whereNotNull('suspended_at')->count(),
-            'unverified' => User::whereNull('email_verified_at')->count(),
+            'suspended' => User::where('is_demo', false)->whereNotNull('suspended_at')->count(),
+            'unverified' => User::where('is_demo', false)->whereNull('email_verified_at')->count(),
         ];
     }
 }; ?>
@@ -74,7 +77,7 @@ new #[Title('People')] #[RequiresAdmin] class extends Component {
 <x-admin.frame :title="__('People')" :lead="__('Everyone with an account. Open a person to suspend, delete or change them. You see how many requests reach their tunnels, never the requests themselves.')">
     <div class="flex flex-wrap items-center gap-3">
         <div class="flex rounded-md border border-zinc-200 dark:border-zinc-700" role="group" aria-label="{{ __('Show') }}">
-            @foreach (['all' => __('Everyone'), 'admins' => __('Admins'), 'suspended' => __('Suspended'), 'unverified' => __('Not confirmed')] as $key => $label)
+            @foreach (['all' => __('Everyone'), 'admins' => __('Admins'), 'suspended' => __('Suspended'), 'unverified' => __('Not confirmed')] + (\App\Support\Demo::enabled() || $this->counts['demo'] > 0 ? ['demo' => __('Demo visitors')] : []) as $key => $label)
                 <button type="button" wire:click="setFilter('{{ $key }}')" aria-pressed="{{ $filter === $key ? 'true' : 'false' }}"
                     @class(['px-3 py-1.5 text-sm first:rounded-l-md last:rounded-r-md', 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' => $filter === $key, 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800' => $filter !== $key])>
                     {{ $label }} <span class="tabular-nums opacity-60">{{ $this->counts[$key] }}</span>

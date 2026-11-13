@@ -2,6 +2,7 @@
     $demo = preg_replace('#^(https?://)your-name\.#', '$1demo.', config('exposehub.example_address'));
     $demoHost = preg_replace('#^https?://#', '', $demo);
     $source = \App\Support\Source::url();
+    $offersDemo = \App\Support\Demo::enabled() && auth()->guest();
 
     // The film: five things a tunnel is for, each one scene on the same cable.
     $scenes = [
@@ -43,6 +44,20 @@
             <p class="mt-6 max-w-[56ch] text-xl text-zinc-600 dark:text-zinc-300">
                 {{ __('One command connects a service on your computer to an address anyone can open. Your team runs the server itself, on its own domain.') }}
             </p>
+            {{-- The demo: one click, no account. Shown while the operator has it switched on. --}}
+            @if ($offersDemo)
+                <form method="POST" action="{{ route('demo.enter') }}" class="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3" data-test="landing-demo">
+                    @csrf
+                    <flux:button type="submit" variant="primary" data-test="demo-enter">{{ __('Try the demo') }}</flux:button>
+                    <p class="max-w-[46ch] text-sm text-zinc-600 dark:text-zinc-300">
+                        {{ __('No account needed. You get a dashboard with sample data and can open a real tunnel. All of it is deleted every :n minutes.', ['n' => (int) config('exposehub.demo.reset_minutes')]) }}
+                    </p>
+                </form>
+            @endif
+            @if (session('demo'))
+                <p class="mt-4 max-w-[56ch] font-medium text-fault" role="status" data-test="demo-notice">{{ session('demo') }}</p>
+            @endif
+
             @if ($source)
                 <p class="mt-5">
                     <a href="#open-source" class="inline-flex items-center gap-2.5 font-medium text-zinc-900 underline decoration-cable decoration-2 underline-offset-4 dark:text-white">

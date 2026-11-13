@@ -170,6 +170,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Demo
+    |--------------------------------------------------------------------------
+    |
+    | With the demo on, the landing page offers "Try the demo": one click
+    | signs a visitor in without an account, as a member of a demo team that
+    | holds sample data. Visitors create tokens and open real tunnels, each
+    | seeing only their own. Every "reset_minutes" the team, its visitors,
+    | their tokens and their request logs are deleted and the sample data is
+    | laid out again; the tunnel server closes the demo tunnels with them.
+    |
+    | Demo tunnels are public addresses anyone can open without an account.
+    | The tunnel server limits them (random names, a notice page, caps; see
+    | docs/server.md), and the numbers here bound what the demo can add to
+    | the database between two resets. Off by default.
+    |
+    */
+
+    'demo' => [
+        'enabled' => filter_var(env('EXPOSEHUB_DEMO', false), FILTER_VALIDATE_BOOLEAN),
+        'reset_minutes' => is_numeric(env('EXPOSEHUB_DEMO_RESET_MINUTES')) ? max(1, (int) env('EXPOSEHUB_DEMO_RESET_MINUTES')) : 30,
+        // Visitors between two resets, and how many one address may start an hour.
+        'max_visitors' => is_numeric(env('EXPOSEHUB_DEMO_MAX_VISITORS')) ? max(0, (int) env('EXPOSEHUB_DEMO_MAX_VISITORS')) : 200,
+        'visitors_per_ip_per_hour' => is_numeric(env('EXPOSEHUB_DEMO_VISITORS_PER_IP_PER_HOUR')) ? max(1, (int) env('EXPOSEHUB_DEMO_VISITORS_PER_IP_PER_HOUR')) : 6,
+        'tokens_per_visitor' => is_numeric(env('EXPOSEHUB_DEMO_TOKENS_PER_VISITOR')) ? max(0, (int) env('EXPOSEHUB_DEMO_TOKENS_PER_VISITOR')) : 2,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Source code
     |--------------------------------------------------------------------------
     |

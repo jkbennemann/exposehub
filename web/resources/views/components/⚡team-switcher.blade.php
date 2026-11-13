@@ -108,13 +108,15 @@ new class extends Component {
                 </flux:menu.item>
             @endforeach
 
-            <flux:menu.separator />
+            @unless (auth()->user()->is_demo)
+                <flux:menu.separator />
 
-            <flux:modal.trigger name="create-team-switcher">
-                <flux:menu.item icon="plus" class="cursor-pointer" data-test="team-switcher-new-team">
-                    {{ __('New team') }}
-                </flux:menu.item>
-            </flux:modal.trigger>
+                <flux:modal.trigger name="create-team-switcher">
+                    <flux:menu.item icon="plus" class="cursor-pointer" data-test="team-switcher-new-team">
+                        {{ __('New team') }}
+                    </flux:menu.item>
+                </flux:modal.trigger>
+            @endunless
         </flux:menu>
     </flux:dropdown>
 </div>

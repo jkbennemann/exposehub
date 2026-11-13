@@ -59,6 +59,10 @@ new #[Title('Request logs')] #[RequiresTeamMembership] class extends Component {
         if (! array_key_exists($this->range, self::RANGES)) {
             $this->range = '24h';
         }
+        // A visitor of the demo has no requests yet; the sample ones are shared with them.
+        if (Auth::user()->is_demo && ! request()->has('owner')) {
+            $this->owner = 'all';
+        }
     }
 
     #[Computed]
@@ -203,6 +207,11 @@ new #[Title('Request logs')] #[RequiresTeamMembership] class extends Component {
     #[Computed]
     public function colleagues(): Collection
     {
+        // The other members of the demo team are strangers to each other.
+        if (Auth::user()->is_demo) {
+            return new Collection;
+        }
+
         return $this->team->members()
             ->where('users.id', '!=', Auth::id())
             ->whereNotIn('users.id', $this->myGrants->pluck('viewer_id'))
@@ -237,6 +246,8 @@ new #[Title('Request logs')] #[RequiresTeamMembership] class extends Component {
 
     public function share(): void
     {
+        abort_if(Auth::user()->is_demo, 403);
+
         $this->validate(['shareWith' => ['required', 'integer']], ['shareWith.required' => __('Choose a colleague.')]);
 
         $viewer = $this->team->members()->where('users.id', (int) $this->shareWith)->where('users.id', '!=', Auth::id())->first();
@@ -538,7 +549,7 @@ new #[Title('Request logs')] #[RequiresTeamMembership] class extends Component {
                     <flux:button type="submit" variant="primary" data-test="log-share">{{ __('Share my logs') }}</flux:button>
                     @error('shareWith') <p class="w-full text-sm text-fault">{{ $message }}</p> @enderror
                 </form>
-            @elseif ($this->myGrants->isEmpty())
+            @elseif ($this->myGrants->isEmpty() && ! auth()->user()->is_demo)
                 <p class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">{{ __('There is nobody else in this team yet.') }}</p>
             @endif
 

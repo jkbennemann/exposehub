@@ -133,6 +133,13 @@ new #[Title('Access')] #[RequiresTeamMembership] class extends Component {
 
     public function saveAddress(): void
     {
+        // A saved name is kept from every other team, which a visitor without an account must not be able to do.
+        if (Auth::user()->is_demo) {
+            $this->addError('name', __('Saving an address is not part of the demo. Create an account to keep a name for your team.'));
+
+            return;
+        }
+
         $this->name = Str::lower(trim($this->name));
         $hostname = $this->name.$this->domainSuffix();
         $this->validate([
@@ -372,6 +379,9 @@ new #[Title('Access')] #[RequiresTeamMembership] class extends Component {
         <h2 class="font-display text-2xl font-semibold">{{ __('Saved addresses') }}</h2>
         <p class="mt-1 max-w-[62ch] text-zinc-600 dark:text-zinc-300">{{ __('A saved name is your team\'s: nobody else can open a tunnel on it, and it keeps its rule. Good for addresses you share or give to webhooks.') }}</p>
 
+        @if (auth()->user()->is_demo)
+            <p class="mt-4 max-w-[62ch] text-sm text-zinc-500 dark:text-zinc-400" data-test="address-demo-note">{{ __('In the demo, addresses are random and cannot be saved. The two below are sample data.') }}</p>
+        @else
         <form wire:submit="saveAddress" class="mt-4 flex flex-wrap items-start gap-3">
             <div class="flex min-w-0 flex-1 items-center rounded-md border border-zinc-200 bg-white pr-3 font-mono text-sm focus-within:ring-2 focus-within:ring-cable dark:border-zinc-700 dark:bg-zinc-900">
                 <input wire:model="name" type="text" placeholder="shop" aria-label="{{ __('Name') }}" autocomplete="off" spellcheck="false"
@@ -380,6 +390,7 @@ new #[Title('Access')] #[RequiresTeamMembership] class extends Component {
             </div>
             <flux:button type="submit" variant="primary" data-test="address-save">{{ __('Save address') }}</flux:button>
         </form>
+        @endif
         @error('name')<p class="mt-2 text-sm text-fault">{{ $message }}</p>@enderror
 
         <ul class="mt-4 border-t border-zinc-200 dark:border-zinc-700" data-test="address-list">

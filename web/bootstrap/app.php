@@ -5,6 +5,7 @@ use App\Http\Middleware\DenyFraming;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureNotSuspended;
 use App\Http\Middleware\EnsureVerifiedForAccountSecurity;
+use App\Http\Middleware\LimitDemoVisitors;
 use App\Http\Middleware\RequireRecentPassword;
 use App\Http\Middleware\SetTeamUrlDefaults;
 use App\Http\Middleware\ThrottlePasswordResetLinks;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // Ends every other session of an account once its password changes.
             AuthenticateSession::class,
             EnsureNotSuspended::class,
+            LimitDemoVisitors::class,
             EnsureVerifiedForAccountSecurity::class,
             ThrottlePasswordResetLinks::class,
             SetTeamUrlDefaults::class,

@@ -121,7 +121,10 @@ class SnapshotController extends Controller
     }
 
     /**
-     * @return Generator<int, array{id: int, hash: string, team_id: int, team: string, user_id: int}>
+     * Tokens of the demo team are marked, and only they: the tunnel server
+     * gives those random addresses only, behind a notice page and within caps.
+     *
+     * @return Generator<int, array{id: int, hash: string, team_id: int, team: string, user_id: int, demo?: true}>
      */
     private function tokens(): Generator
     {
@@ -134,6 +137,7 @@ class SnapshotController extends Controller
                 'agent_tokens.team_id',
                 'agent_tokens.user_id',
                 'teams.slug as team',
+                'teams.is_demo as demo',
             ])
             ->lazyById(self::CHUNK, 'agent_tokens.id', 'id');
 
@@ -144,7 +148,7 @@ class SnapshotController extends Controller
                 'team_id' => $token->team_id,
                 'team' => $token->getAttribute('team'),
                 'user_id' => $token->user_id,
-            ];
+            ] + ((bool) $token->getAttribute('demo') ? ['demo' => true] : []);
         }
     }
 
@@ -170,7 +174,8 @@ class SnapshotController extends Controller
     {
         $domains = CustomDomain::query()
             ->verified()
-            ->whereHas('team')
+            // The demo team's domain is sample data; no tunnel is ever served on it.
+            ->whereHas('team', fn ($team) => $team->where('is_demo', false))
             ->select(['custom_domains.id', 'hostname', 'team_id'])
             ->lazyById(self::CHUNK, 'custom_domains.id', 'id');
 

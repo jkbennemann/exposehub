@@ -31,6 +31,10 @@ new class extends Component {
         if (! Auth::user()->hasVerifiedEmail()) {
             return collect();
         }
+        // A visitor of the demo stays in the demo team.
+        if (Auth::user()->is_demo) {
+            return collect();
+        }
 
         $email = Str::lower(Auth::user()->email);
 
@@ -52,6 +56,8 @@ new class extends Component {
 
     public function acceptInvitation(string $code): void
     {
+        abort_if(Auth::user()->is_demo, 403);
+
         $invitation = $this->findPendingInvitation($code);
 
         $user = Auth::user();

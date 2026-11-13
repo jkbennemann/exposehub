@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $slug
  * @property bool $is_personal
+ * @property bool $is_demo the team visitors of the demo are signed into
  * @property string $access anyone or networks: the rule for addresses without one of their own
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -148,6 +149,7 @@ class Team extends Model
     {
         return [
             'is_personal' => 'boolean',
+            'is_demo' => 'boolean',
         ];
     }
 

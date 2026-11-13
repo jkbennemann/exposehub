@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\User;
 use App\Notifications\Account\AccountNotice;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
@@ -18,6 +19,11 @@ final class AccountMail
      */
     public static function send(object|string $to, AccountNotice $notice): void
     {
+        // Accounts of the demo have an address that cannot receive mail.
+        if ($to instanceof User && $to->is_demo) {
+            return;
+        }
+
         try {
             if (is_string($to)) {
                 Notification::route('mail', $to)->notify($notice);
