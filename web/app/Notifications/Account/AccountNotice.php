@@ -112,6 +112,21 @@ final class AccountNotice extends Notification
             __('If you did not remove it, reset your password now.'));
     }
 
+    public static function ssoLinked(string $provider): self
+    {
+        return new self('sso-linked', __('Your account now signs in with :name', ['name' => $provider]), [
+            __('Someone signed in to your account through :name for the first time. From now on that is the way in: your password and passkeys no longer work here.', ['name' => $provider]),
+        ], null, __('If that was not you, tell the people who run this service.'));
+    }
+
+    public static function tokensExpiring(string $provider, int $days): self
+    {
+        return new self('tokens-expiring', __('Your agent tokens stop working soon'), [
+            trans_choice('{1} Your agent tokens work for one more day. After that your tunnels close until you sign in again.|[2,*] Your agent tokens work for :n more days. After that your tunnels close until you sign in again.', $days, ['n' => $days]),
+            __('Signing in to the dashboard with :name keeps them working; nothing else needs doing.', ['name' => $provider]),
+        ], [__('Sign in'), route('login')]);
+    }
+
     public static function agentTokenCreated(string $tokenName, string $prefix, Team $team): self
     {
         return new self('agent-token-created', __('A new agent token was created'), [

@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureNotSuspended;
 use App\Http\Middleware\EnsureVerifiedForAccountSecurity;
 use App\Http\Middleware\LimitDemoVisitors;
 use App\Http\Middleware\RequireRecentPassword;
+use App\Http\Middleware\RequireSsoSignIn;
 use App\Http\Middleware\SetTeamUrlDefaults;
 use App\Http\Middleware\ThrottlePasswordResetLinks;
 use Illuminate\Foundation\Application;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             AuthenticateSession::class,
             EnsureNotSuspended::class,
             LimitDemoVisitors::class,
+            RequireSsoSignIn::class,
             EnsureVerifiedForAccountSecurity::class,
             ThrottlePasswordResetLinks::class,
             SetTeamUrlDefaults::class,

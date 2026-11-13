@@ -9,6 +9,17 @@
             <x-team-invitation-alert :invitation="$teamInvitation" :action="__('Log in')" />
         @endif
 
+        {{-- Single sign-on, when the operator has set a provider up. Accounts of its domains get in this way only. --}}
+        @if (\App\Support\Sso\Sso::enabled())
+            <div class="flex flex-col gap-3" data-test="sso-sign-in">
+                <flux:button variant="primary" class="w-full" :href="route('sso.redirect')" data-test="sso-button">
+                    {{ __('Sign in with :name', ['name' => \App\Support\Sso\Sso::name()]) }}
+                </flux:button>
+                <p class="text-center text-sm text-zinc-600 dark:text-zinc-400">{{ __('For accounts your organisation signs in. Everyone else uses a passkey or password below.') }}</p>
+            </div>
+            <flux:separator :text="__('or')" />
+        @endif
+
         <x-passkey-verify />
 
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">

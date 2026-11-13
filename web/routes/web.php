@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\EnterDemo;
+use App\Http\Controllers\SingleSignOn;
 use App\Http\Middleware\EnsureTeamMembership;
 use App\Support\LegalPage;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,10 @@ foreach (LegalPage::cases() as $legalPage) {
     Route::get($legalPage->value, fn () => $legalPage->exists() ? view('legal', ['page' => $legalPage]) : abort(404))
         ->name('legal.'.$legalPage->value);
 }
+
+// Sign-in through the identity provider. 404 while EXPOSEHUB_SSO_* is not set.
+Route::get('sso/redirect', [SingleSignOn::class, 'redirect'])->middleware('throttle:30,1')->name('sso.redirect');
+Route::get('sso/callback', [SingleSignOn::class, 'callback'])->middleware('throttle:30,1')->name('sso.callback');
 
 // The admin area. Not under a team, and named so that no admin page shares a
 // path with a team page (/{team}/dashboard, inspector, logs, tokens, domains).

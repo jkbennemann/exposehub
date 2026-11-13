@@ -56,6 +56,20 @@ new #[Title('Agent tokens')] #[RequiresTeamMembership] class extends Component {
             ->get();
     }
 
+    /**
+     * Until when the signed-in person's tokens work, if single sign-on limits that.
+     */
+    #[Computed]
+    public function tokensGoodUntil(): ?\Carbon\CarbonInterface
+    {
+        $days = \App\Support\Sso\Sso::tokenDays();
+        $signedIn = $days > 0
+            ? Auth::user()->identities()->where('issuer', \App\Support\Sso\Sso::issuer())->value('signed_in_at')
+            : null;
+
+        return $signedIn === null ? null : \Illuminate\Support\Carbon::parse($signedIn)->addDays($days);
+    }
+
     public function createToken(IssueAgentToken $issue): void
     {
         $allowed = Gate::inspect('create', [AgentToken::class, $this->team]);
@@ -112,6 +126,12 @@ new #[Title('Agent tokens')] #[RequiresTeamMembership] class extends Component {
             <p class="mt-3 max-w-[58ch] text-zinc-600 dark:text-zinc-300">
                 {{ __('A token lets the agent on a machine open tunnels for :team. Create one per machine, so you can revoke a single one when a laptop is lost.', ['team' => $this->team->name]) }}
             </p>
+            @if ($this->tokensGoodUntil !== null)
+                <p class="mt-3 max-w-[58ch] text-zinc-600 dark:text-zinc-300" data-test="tokens-sso-note">
+                    {{ trans_choice('{1} Your tokens work for one day after your last sign-in with :name, at present until :date.|[2,*] Your tokens work for :n days after your last sign-in with :name, at present until :date.', \App\Support\Sso\Sso::tokenDays(), ['n' => \App\Support\Sso\Sso::tokenDays(), 'name' => \App\Support\Sso\Sso::name(), 'date' => $this->tokensGoodUntil->isoFormat('D MMMM YYYY')]) }}
+                    {{ __('Signing in here again moves that date on.') }}
+                </p>
+            @endif
         </div>
 
         <flux:modal.trigger name="create-token">

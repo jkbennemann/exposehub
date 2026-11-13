@@ -170,6 +170,46 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Single sign-on
+    |--------------------------------------------------------------------------
+    |
+    | Sign-in through the company's identity provider, over OpenID Connect:
+    | Okta, Microsoft Entra ID, Google Workspace, Keycloak and others. It is
+    | on once the issuer, the client and at least one email domain are set.
+    |
+    | "domains" are the email domains the provider answers for. Accounts with
+    | such an address are created at their first sign-in through it, and may
+    | sign in no other way; passwords and passkeys stop working for them. The
+    | addresses in EXPOSEHUB_ADMIN_EMAILS are exempt, so that the people who
+    | run the install can still get in when the provider is down.
+    |
+    | Agent tokens outlive a browser session, so a person the provider no
+    | longer lets in would keep their tunnels. "token_days" ends that: tokens
+    | of such an account work for that many days after its last sign-in
+    | through the provider. 0 lets them work for good.
+    |
+    */
+
+    'sso' => [
+        // As the provider publishes it, e.g. https://example.okta.com
+        'issuer' => trim((string) env('EXPOSEHUB_SSO_ISSUER', '')),
+        'client_id' => trim((string) env('EXPOSEHUB_SSO_CLIENT_ID', '')),
+        'client_secret' => (string) env('EXPOSEHUB_SSO_CLIENT_SECRET', ''),
+        // What the button says: "Sign in with Okta".
+        'name' => trim((string) env('EXPOSEHUB_SSO_NAME', '')) ?: 'single sign-on',
+        'domains' => array_values(array_filter(array_map(
+            fn (string $domain) => strtolower(ltrim(trim($domain), '@')),
+            explode(',', (string) env('EXPOSEHUB_SSO_DOMAINS', '')),
+        ))),
+        'scopes' => trim((string) env('EXPOSEHUB_SSO_SCOPES', '')) ?: 'openid email profile',
+        // Providers that do not say whether an address is confirmed (Entra ID)
+        // need this off; only then is their word for the address taken as it is.
+        'require_verified_email' => filter_var(env('EXPOSEHUB_SSO_REQUIRE_VERIFIED_EMAIL', true), FILTER_VALIDATE_BOOLEAN),
+        'token_days' => is_numeric(env('EXPOSEHUB_SSO_TOKEN_DAYS')) ? max(0, (int) env('EXPOSEHUB_SSO_TOKEN_DAYS')) : 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Demo
     |--------------------------------------------------------------------------
     |

@@ -120,6 +120,17 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
+     * Who this account is at the identity provider, once it has signed in
+     * through single sign-on.
+     *
+     * @return HasMany<UserIdentity, $this>
+     */
+    public function identities(): HasMany
+    {
+        return $this->hasMany(UserIdentity::class);
+    }
+
+    /**
      * @return HasMany<AgentToken, $this>
      */
     public function agentTokens(): HasMany

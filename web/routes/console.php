@@ -29,3 +29,6 @@ Schedule::call(fn () => TunnelDisconnect::query()->expired()->delete())
 $demo = Schedule::command('demo:reset')->when(fn () => Demo::due())
     ->description('Wipe the demo and lay its sample data out again when its time is up');
 Demo::enabled() ? $demo->everyMinute() : $demo->hourly();
+
+Schedule::command('sso:remind')->dailyAt('07:30')
+    ->description('Warn people whose agent tokens stop working soon for want of a sign-in through the identity provider');

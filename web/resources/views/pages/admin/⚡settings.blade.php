@@ -161,6 +161,24 @@ new #[Title('Settings')] #[RequiresAdmin] class extends Component {
         </div>
     </form>
 
+    {{-- Single sign-on is set in the deployment; shown here so an admin can see what is in force and what to register with the provider. --}}
+    <section class="mt-10 max-w-3xl" data-test="admin-sso">
+        <h2 class="font-display text-2xl font-semibold">{{ __('Single sign-on') }}</h2>
+        @if (\App\Support\Sso\Sso::enabled())
+            <p class="mt-2 text-zinc-600 dark:text-zinc-300">{{ __('On. Accounts of the domains below sign in with :name only; the platform owners keep their password and passkeys.', ['name' => \App\Support\Sso\Sso::name()]) }}</p>
+            <dl class="mt-4 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+                <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Issuer') }}</dt><dd class="font-mono [overflow-wrap:anywhere]">{{ \App\Support\Sso\Sso::issuer() }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Client id') }}</dt><dd class="font-mono [overflow-wrap:anywhere]">{{ config('exposehub.sso.client_id') }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Redirect address to register there') }}</dt><dd class="font-mono [overflow-wrap:anywhere]">{{ \App\Support\Sso\Sso::redirectUri() }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Domains') }}</dt><dd class="font-mono">{{ implode(', ', \App\Support\Sso\Sso::domains()) }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Tokens work') }}</dt><dd>{{ \App\Support\Sso\Sso::tokenDays() > 0 ? trans_choice('{1} one day after the last sign-in|[2,*] :n days after the last sign-in', \App\Support\Sso\Sso::tokenDays(), ['n' => \App\Support\Sso\Sso::tokenDays()]) : __('without a limit') }}</dd>
+                <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Accounts signed in through it') }}</dt><dd>{{ \App\Models\UserIdentity::query()->where('issuer', \App\Support\Sso\Sso::issuer())->count() }}</dd>
+            </dl>
+        @else
+            <p class="mt-2 text-zinc-600 dark:text-zinc-300">{{ __('Off. It is switched on in the deployment, with the issuer, the client and the email domains of your identity provider; the admin guide says how.') }}</p>
+        @endif
+    </section>
+
     <section class="mt-10 max-w-3xl">
         <h2 class="font-display text-2xl font-semibold">{{ __('Set in the deployment only') }}</h2>
         <p class="mt-2 text-zinc-600 dark:text-zinc-300">{{ __('Addresses, the tunnel domain, mail, the node secret, platform owners and whether the tunnel server logs requests at all live in the deployment (Helm chart values), because the tunnel server and the cluster need them too.') }}</p>
