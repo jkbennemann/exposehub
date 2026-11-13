@@ -44,23 +44,45 @@ In the admin area, visitors are listed under People → Demo visitors, apart fro
 
 ## Single sign-on
 
-exposehub can sign people in through your identity provider over OpenID Connect: Okta, Microsoft Entra ID, Google Workspace, Keycloak and others. It is off until you set the issuer, a client and at least one email domain.
+exposehub can sign people in through an identity provider over OpenID Connect: Okta, Microsoft Entra ID, Google Workspace, Keycloak and others. There are two ways to set one up, and both can be in use at once:
+
+- **A provider for the whole install**, set in the deployment. Use it when everyone on the install belongs to one organisation.
+- **A provider for one team**, entered by the team's owner in the team's settings and approved by a platform admin. People who sign in through it become members of that team. Use it when an organisation is one of several on the install.
 
 ### What it does
 
-- **The login page gets a button.** "Sign in with Okta", or whatever you name the provider.
-- **The provider answers for the email domains you name.** An account with such an address is made at the person's first sign-in through the provider. It needs no invitation and no password.
+- **People sign in at their provider.** With a provider for the install the login page has a button, "Sign in with Okta" or whatever you name it. With providers of teams it asks for the work email address and finds the provider by its domain; it names no team.
+- **A provider answers for email domains.** An account with an address of its domains is made at the person's first sign-in through it. It needs no invitation and no password.
 - **Those accounts sign in through the provider only.** A password, a passkey or a remembered sign-in no longer gets them in: a session that did not begin at the provider is ended. Nobody can register an address of these domains or move an account to one.
-- **You keep a way in.** The addresses in `EXPOSEHUB_ADMIN_EMAILS` keep password, two-factor and passkeys, so the people who run the install get in while the provider is down or set up wrongly. Make sure at least one of them has a password that works before you switch this on. The provider never signs anyone in as one of them, makes an account for such an address or moves an account to it: who runs the install is not the provider's to say.
-- **Agent tokens need a recent sign-in.** A token lives on a laptop and outlives the browser session, so someone you have disabled at the provider would keep their tunnels. Tokens of an account the provider answers for work for `EXPOSEHUB_SSO_TOKEN_DAYS` (30) after its last sign-in through the provider. The person gets a mail three days before, and signing in to the dashboard is all it takes. Accounts that have not signed in through the provider yet get the same time, counted from when you switched single sign-on on.
+- **A team's provider fills the team.** Whoever it signs in becomes a member of the team, at every sign-in. Someone you remove from the team here is back at their next sign-in; to keep them out, stop letting them in at the provider.
+- **You keep a way in.** The addresses in `EXPOSEHUB_ADMIN_EMAILS` keep password, two-factor and passkeys, so the people who run the install get in while a provider is down or set up wrongly. Make sure at least one of them has a password that works before you switch this on. No provider ever signs anyone in as one of them, makes an account for such an address or moves an account to it: who runs the install is not a provider's to say.
+- **Agent tokens need a recent sign-in.** A token lives on a laptop and outlives the browser session, so someone you have disabled at the provider would keep their tunnels. Tokens of an account a provider answers for work for `EXPOSEHUB_SSO_TOKEN_DAYS` (30) after its last sign-in through it. The person gets a mail three days before, and signing in to the dashboard is all it takes. Accounts that have not signed in through the provider yet get the same time, counted from when the provider came into force.
 - **Where the dashboard asks for the password again** (the admin area, security settings), such an account is sent to the provider to sign in again. That needs a provider that says when the person last signed in (`auth_time`); Okta, Entra ID and Keycloak do.
 
 An existing account is tied to the person at their first sign-in if it has the same address and confirmed that address itself; the person gets a mail about it. From then on the account is found by the provider's own id for the person, not by the address, and follows the address if it changes at the provider.
 
-### Setting it up
+### At the provider
 
-1. At the provider, create an OpenID Connect application of the "web application" kind (authorization code flow, with a client secret). Its redirect address is `https://<your dashboard>/sso/callback`; the admin area shows the exact address under Settings. It needs the scopes `openid`, `email` and `profile`.
-2. Set these for the dashboard and its scheduler:
+Create an OpenID Connect application of the "web application" kind: authorization code flow, with a client secret. Its redirect address is `https://<your dashboard>/sso/callback`, the same for every provider; the admin area shows it under Settings, and a team's owner sees it in the team's settings. It needs the scopes `openid`, `email` and `profile`.
+
+With Okta: Applications → Create App Integration → OIDC, Web Application; an Okta-generated client ID; grant type Authorization Code; the sign-in redirect URI as above; assign the people or groups who may use exposehub. The issuer is your Okta domain, such as `https://example.okta.com`, or the issuer of the authorization server you use.
+
+### A provider for one team
+
+1. The team's owner opens the team under Settings → Teams and fills in "Single sign-on": what the provider is called, its issuer, the client ID and secret, and the email domains of the addresses it signs in. Only the owner can, and not for a personal team.
+2. A platform admin opens Admin → Single sign-on and approves it. Until then nothing changes for anyone, and the dashboard does not contact the provider.
+
+**Approving is the step that matters.** An approved provider signs people in as any address of its domains. Approve only when you know that the domains belong to the people behind the team and that the issuer is their provider; the page shows both, and who entered them. The approval is recorded in the audit log.
+
+- Changing the issuer or the domains, or switching to taking addresses the provider has not confirmed, withdraws the approval until an admin approves again. Changing the client ID or secret does not.
+- A domain belongs to one provider. A second team cannot be approved for it, and the install's own provider comes first.
+- The issuer has to be an https address on a public host name.
+- The client secret is stored encrypted with the application key and is never shown again.
+- An admin can withdraw the approval, and the owner can remove the provider. The accounts and their place in the team stay; they sign in with a password from then on and get one by asking for a reset mail.
+
+### A provider for the whole install
+
+Set these for the dashboard and its scheduler:
 
 | Setting | What it is |
 |---|---|
@@ -68,14 +90,17 @@ An existing account is tied to the person at their first sign-in if it has the s
 | `EXPOSEHUB_SSO_CLIENT_ID`, `EXPOSEHUB_SSO_CLIENT_SECRET` | The application's client id and secret |
 | `EXPOSEHUB_SSO_DOMAINS` | The email domains the provider answers for, comma-separated |
 | `EXPOSEHUB_SSO_NAME` | What the button calls the provider. Default: single sign-on |
-| `EXPOSEHUB_SSO_TOKEN_DAYS` | How many days tokens work after the last sign-in through the provider; `0` for good. Default `30` |
 | `EXPOSEHUB_SSO_REQUIRE_VERIFIED_EMAIL` | Whether the provider has to say that an address is confirmed (`email_verified`). Default `true`. Entra ID does not say it; set `false` there, and only for a provider where people cannot choose their own address |
 | `EXPOSEHUB_SSO_SCOPES` | Default `openid email profile` |
 
-With Okta: Applications → Create App Integration → OIDC, Web Application; grant type Authorization Code; sign-in redirect URI as above; assign the people or groups who may use exposehub. The issuer is your Okta domain, or the issuer of the authorization server you use.
+One setting applies to every provider, the install's and the teams':
+
+| Setting | What it is |
+|---|---|
+| `EXPOSEHUB_SSO_TOKEN_DAYS` | How many days tokens work after the last sign-in through a provider; `0` for good. Default `30` |
 
 ### What it does not do yet
 
 - **Disabling someone at the provider does not close their tunnels at once.** It closes them when their tokens' days run out. Suspend the account in the admin area to cut it off immediately; that takes effect within seconds.
-- **Teams are not filled from the provider's groups.** People join teams by invitation, as before.
-- **One provider per install,** and no SAML.
+- **Groups at the provider are not looked at.** Everyone a team's provider signs in becomes a plain member; roles are given in the team's settings.
+- **One provider per team, and one team per provider.** No SAML.
