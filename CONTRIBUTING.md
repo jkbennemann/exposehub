@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for wanting to help. Bug reports, fixes, documentation and features are all welcome. For anything bigger than a small fix, open an issue first so we can agree on the approach before you spend time on it.
+Thanks for wanting to help. Bug reports, fixes, documentation and features are all welcome. For anything bigger than a small fix, open an issue first so we can agree on the approach before you spend time on it. An idea for something new starts as a [feature request](https://github.com/jkbennemann/exposehub/issues/new?template=feature_request.yml).
 
 Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 

@@ -153,6 +153,12 @@ bin/exposehub http 8000 --server http://localhost:8080 --token dev-token --subdo
 curl http://demo.localhost:8080/
 ```
 
+## Feature requests
+
+Missing something? [Request a feature](https://github.com/jkbennemann/exposehub/issues/new?template=feature_request.yml). The form is short: the problem you have, which part of exposehub it concerns and how you use it. An idea of how it could work is welcome and not required.
+
+Look through the [open requests](https://github.com/jkbennemann/exposehub/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement+sort%3Areactions-%2B1-desc) first. A 👍 on one that is already there shows that more than one person needs it, and the list is sorted by them. Something that does not work as described is a [bug report](https://github.com/jkbennemann/exposehub/issues/new?template=bug_report.yml) instead, and security problems go through [SECURITY.md](SECURITY.md).
+
 ## Contributing
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the tests and the licence your contribution comes in under, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) how we treat each other.
