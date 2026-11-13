@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-13
+
 ### Fixed
 
 - Helm chart with `networkPolicy.type: cilium`: the dashboard could not reach an identity provider, so every single sign-on failed with `discovery unreachable`. The policy now opens port 443 to the host of `web.sso.issuer` and to the hosts in the new `web.sso.providerHosts`, where the hosts of teams' providers go. The default `kubernetes` policy and the Compose setup were not affected.
@@ -107,7 +109,8 @@ First public release.
 - The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
 - The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
 
-[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.2.0
 [0.1.2]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.2

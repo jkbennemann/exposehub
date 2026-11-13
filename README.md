@@ -90,7 +90,7 @@ As of November 2026, from each project's documentation and issue tracker; correc
 One Linux server with Docker and two DNS records:
 
 ```sh
-git clone --branch v0.3.0 https://github.com/jkbennemann/exposehub.git
+git clone --branch v0.3.1 https://github.com/jkbennemann/exposehub.git
 cd exposehub/deploy/compose
 ./install.sh
 docker compose up -d --wait

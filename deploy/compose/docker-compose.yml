@@ -104,14 +104,14 @@ x-web-tmpfs: &web-tmpfs
   - /config:uid=33,gid=33,mode=0750
   - /tmp
 
-x-web-image: &web-image ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-web:${EXPOSEHUB_VERSION:-0.3.0}
+x-web-image: &web-image ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-web:${EXPOSEHUB_VERSION:-0.3.1}
 
 services:
   # The only service with published ports. Terminates TLS for the dashboard,
   # every tunnel and teams' own domains; see caddy/Caddyfile.
   caddy:
     <<: *hardening
-    image: ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-caddy:${EXPOSEHUB_VERSION:-0.3.0}
+    image: ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-caddy:${EXPOSEHUB_VERSION:-0.3.1}
     # IPv4 only. Docker would also publish on the host's IPv6 addresses and
     # relay those visitors into this IPv4-only network through docker-proxy,
     # which replaces each visitor's address with the network's gateway. Every
@@ -161,7 +161,7 @@ services:
   # it. One instance only, because tunnels live in its memory.
   server:
     <<: *hardening
-    image: ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-server:${EXPOSEHUB_VERSION:-0.3.0}
+    image: ${EXPOSEHUB_REGISTRY:-ghcr.io/jkbennemann}/exposehub-server:${EXPOSEHUB_VERSION:-0.3.1}
     environment:
       EXPOSEHUB_LISTEN: ":8080"
       # Caddy's ask endpoint and the health check; not published.
