@@ -52,6 +52,7 @@
         <header class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-8">
             <x-app-logo href="{{ route('home') }}" />
             <nav class="flex items-center gap-2" aria-label="{{ __('Account') }}">
+                <x-source-link class="max-sm:hidden" />
                 @auth
                     <flux:button variant="primary" :href="route('dashboard')">{{ __('Open dashboard') }}</flux:button>
                 @else

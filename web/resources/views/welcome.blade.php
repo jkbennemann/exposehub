@@ -1,6 +1,7 @@
 @php
     $demo = preg_replace('#^(https?://)your-name\.#', '$1demo.', config('exposehub.example_address'));
     $demoHost = preg_replace('#^https?://#', '', $demo);
+    $source = \App\Support\Source::url();
 
     // The film: five things a tunnel is for, each one scene on the same cable.
     $scenes = [
@@ -21,6 +22,8 @@
             <x-app-logo href="{{ route('home') }}" />
 
             <nav class="flex items-center gap-2" aria-label="{{ __('Account') }}">
+                {{-- On a phone the line under the headline carries the mark; the header has no room for it. --}}
+                <x-source-link class="max-sm:hidden" />
                 <flux:button variant="ghost" :href="route('docs')" class="max-sm:hidden">{{ __('Docs') }}</flux:button>
                 @auth
                     <flux:button variant="primary" :href="route('dashboard')">{{ __('Open dashboard') }}</flux:button>
@@ -40,6 +43,14 @@
             <p class="mt-6 max-w-[56ch] text-xl text-zinc-600 dark:text-zinc-300">
                 {{ __('One command connects a service on your computer to an address anyone can open. Your team runs the server itself, on its own domain.') }}
             </p>
+            @if ($source)
+                <p class="mt-5">
+                    <a href="#open-source" class="inline-flex items-center gap-2.5 font-medium text-zinc-900 underline decoration-cable decoration-2 underline-offset-4 dark:text-white">
+                        <x-source-mark class="size-5 shrink-0" />
+                        {{ __('Open source under the Apache 2.0 licence') }}
+                    </a>
+                </p>
+            @endif
 
             {{--
                 The film. The stage is an illustration and hidden from assistive technology; the
@@ -229,10 +240,52 @@
                 </div>
             </section>
 
+            {{--
+                The source. The listing on the right is the repository as it is laid out;
+                it is shown only while the operator publishes where the source is.
+            --}}
+            @if ($source)
+                <section id="open-source" class="mt-20 grid scroll-mt-8 gap-x-16 gap-y-10 lg:grid-cols-2" aria-labelledby="open-source-heading" data-test="landing-source">
+                    <div>
+                        <h2 id="open-source-heading" class="max-w-[20ch] font-display text-3xl leading-tight font-semibold">{{ __('Open source, from the server to this page') }}</h2>
+                        <p class="mt-3 max-w-[52ch] text-zinc-600 dark:text-zinc-300">
+                            {{ __('The tunnel server, the agent and this dashboard are published under the Apache License 2.0. Read how your traffic is handled, run all of it on your own server, and change what does not fit.') }}
+                        </p>
+                        <p class="mt-3 max-w-[52ch] text-zinc-600 dark:text-zinc-300">
+                            {{ __('Found a bug, or miss something? Issues and pull requests are welcome.') }}
+                        </p>
+                        <a href="{{ $source }}" rel="noopener" class="mt-6 inline-flex h-10 items-center gap-2.5 rounded-md bg-cable px-4 text-sm font-medium text-ink hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cable">
+                            <x-source-mark class="size-5 shrink-0" />
+                            {{ \App\Support\Source::onGitHub() ? __('View on GitHub') : __('Read the source') }}
+                        </a>
+                    </div>
+
+                    <div class="self-start rounded-md bg-zinc-900 p-4 text-sm text-zinc-100 sm:p-5 dark:bg-zinc-950 dark:ring-1 dark:ring-zinc-700">
+                        <div class="flex flex-wrap justify-between gap-x-4 gap-y-1 border-b border-zinc-700 pb-3">
+                            <span class="font-mono [overflow-wrap:anywhere]">{{ \App\Support\Source::name() }}</span>
+                            <span class="font-mono text-cable">Apache-2.0</span>
+                        </div>
+                        <dl class="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2">
+                            <dt class="font-mono">tunnel/</dt><dd class="text-zinc-400">{{ __('the tunnel server and the agent, in Go') }}</dd>
+                            <dt class="font-mono">web/</dt><dd class="text-zinc-400">{{ __('this dashboard, in Laravel') }}</dd>
+                            <dt class="font-mono">deploy/</dt><dd class="text-zinc-400">{{ __('Docker Compose and a Helm chart') }}</dd>
+                            <dt class="font-mono">docs/</dt><dd class="text-zinc-400">{{ __('guides for hosting it yourself') }}</dd>
+                            <dt class="font-mono">LICENSE</dt><dd class="text-zinc-400">{{ __('Apache License 2.0') }}</dd>
+                        </dl>
+                        {{-- Only a release has a version worth naming; a build from a checkout says "dev". --}}
+                        @if (str_starts_with(\App\Support\Source::version(), 'v'))
+                            <p class="mt-4 border-t border-zinc-700 pt-3 text-zinc-400">
+                                {{ __('This install runs') }} <span class="font-mono text-live">{{ \App\Support\Source::version() }}</span>
+                            </p>
+                        @endif
+                    </div>
+                </section>
+            @endif
+
             <section class="mt-20 rounded-md bg-zinc-900 px-6 py-10 text-zinc-100 sm:px-10 dark:bg-zinc-950 dark:ring-1 dark:ring-zinc-700">
                 <h2 class="max-w-[22ch] font-display text-3xl leading-tight font-semibold">{{ __('Run by your team, on your own server') }}</h2>
                 <p class="mt-3 max-w-[60ch] text-zinc-300">
-                    {{ __('The tunnel server and this dashboard are software you host yourself. Traffic goes from your visitors to your server to your machine, and through nobody else. Teams share addresses and domains, and each person has tokens of their own.') }}
+                    {{ __('The tunnel server and this dashboard are open-source software you host yourself. Traffic goes from your visitors to your server to your machine, and through nobody else. Teams share addresses and domains, and each person has tokens of their own.') }}
                 </p>
                 <div class="mt-6 flex flex-wrap gap-3">
                     @auth

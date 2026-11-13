@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The landing page says that exposehub is open source: a line under the headline, a section with the repository's layout and licence, and an icon in the header of the landing and docs pages that leads to the source. The icon is GitHub's when `EXPOSEHUB_SOURCE_URL` points there and a neutral one for a fork kept elsewhere; with the setting empty, none of it is shown.
+
 ## [0.1.1] - 2026-11-13
 
 ### Licence

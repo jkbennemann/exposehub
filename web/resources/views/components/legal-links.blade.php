@@ -1,8 +1,7 @@
 @php
     $pages = \App\Support\LegalPage::published();
-    $sourceUrl = config('exposehub.source_url');
-    $version = (string) config('exposehub.version');
-    $version = preg_match('/^\d/', $version) ? 'v'.$version : $version;
+    $sourceUrl = \App\Support\Source::url();
+    $version = \App\Support\Source::version();
 @endphp
 
 {{-- The docs, the operator's legal texts once the operator provides them, and
@@ -13,6 +12,6 @@
         <a href="{{ route('legal.'.$page->value) }}" class="underline-offset-4 hover:text-zinc-900 hover:underline dark:hover:text-white">{{ $page->title() }}</a>
     @endforeach
     @if ($sourceUrl)
-        <a href="{{ $sourceUrl }}" rel="noopener" class="underline-offset-4 hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('Source') }}@if ($version !== '')<span class="text-zinc-400 dark:text-zinc-500"> · {{ $version }}</span>@endif</a>
+        <a href="{{ $sourceUrl }}" rel="noopener" class="underline-offset-4 hover:text-zinc-900 hover:underline dark:hover:text-white"><x-source-mark class="mr-1.5 inline size-3.5 align-[-0.125em]" />{{ __('Source') }}@if ($version !== '')<span class="text-zinc-400 dark:text-zinc-500"> · {{ $version }}</span>@endif</a>
     @endif
 </footer>
