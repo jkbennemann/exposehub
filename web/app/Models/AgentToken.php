@@ -101,24 +101,32 @@ class AgentToken extends Model
             ->selectRaw('1')
             ->whereColumn('user_identities.user_id', 'agent_tokens.user_id')
             ->whereIn('user_identities.issuer', $connections->pluck('issuer')->unique()->all());
-        // Domains whose provider has been in force for longer than tokens last.
-        $overdue = $connections
-            ->filter(fn (Connection $connection) => $connection->activeSince->lessThan($cutoff))
+        // Domains whose provider has been in force for longer than tokens
+        // last: the install's own, and teams', which govern no platform admin.
+        $overdue = fn (bool $ofTeams) => $connections
+            ->filter(fn (Connection $connection) => ($connection->teamId !== null) === $ofTeams && $connection->activeSince->lessThan($cutoff))
             ->flatMap(fn (Connection $connection) => $connection->domains)
             ->unique()->values()->all();
+        [$ofInstall, $ofTeams] = [$overdue(false), $overdue(true)];
+        $outsideOf = function (Builder $users, array $domains): void {
+            foreach ($domains as $domain) {
+                $users->whereRaw("lower(email) not like ? escape '!'", ['%@'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $domain)]);
+            }
+        };
 
         $tokens->whereExists($tied()->where('user_identities.signed_in_at', '>=', $cutoff));
 
-        $tokens->orWhere(function (Builder $never) use ($tied, $overdue) {
+        $tokens->orWhere(function (Builder $never) use ($tied, $ofInstall, $ofTeams, $outsideOf) {
             $never->whereNotExists($tied());
 
-            if ($overdue === []) {
+            if ($ofInstall === [] && $ofTeams === []) {
                 return;
             }
-            $never->whereHas('user', fn (Builder $users) => $users->where(function (Builder $outside) use ($overdue) {
-                $outside->where(function (Builder $otherDomain) use ($overdue) {
-                    foreach ($overdue as $domain) {
-                        $otherDomain->whereRaw("lower(email) not like ? escape '!'", ['%@'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $domain)]);
+            $never->whereHas('user', fn (Builder $users) => $users->where(function (Builder $ungoverned) use ($ofInstall, $ofTeams, $outsideOf) {
+                $ungoverned->where(function (Builder $outside) use ($ofInstall, $ofTeams, $outsideOf) {
+                    $outsideOf($outside, $ofInstall);
+                    if ($ofTeams !== []) {
+                        $outside->where(fn (Builder $team) => $team->where(fn (Builder $q) => $outsideOf($q, $ofTeams))->orWhere('is_admin', true));
                     }
                 })->orWhereIn(DB::raw('lower(email)'), config('exposehub.admin_emails') ?: ['']);
             }));

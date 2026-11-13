@@ -137,15 +137,30 @@ final class Sso
     }
 
     /**
-     * Whether this account may sign in through its provider only. The people
-     * named in EXPOSEHUB_ADMIN_EMAILS keep their password and passkeys, so
+     * The provider this account has to sign in through, if any.
+     *
+     * Nobody governs an account of the demo. Nobody governs the people named
+     * in EXPOSEHUB_ADMIN_EMAILS: they keep their password and passkeys, so
      * that someone can get in while a provider is down or set up wrongly.
+     * And a team's provider governs no platform admin at all: it was brought
+     * by a team, and who administers the install is not a team's to decide.
+     */
+    public static function governing(User $user): ?Connection
+    {
+        if ($user->is_demo || $user->hasOwnerAddress()) {
+            return null;
+        }
+        $connection = self::forEmail($user->email);
+
+        return $connection !== null && $connection->teamId !== null && $user->is_admin ? null : $connection;
+    }
+
+    /**
+     * Whether this account may sign in through its provider only.
      */
     public static function requiredFor(User $user): bool
     {
-        return ! $user->is_demo
-            && ! $user->hasOwnerAddress()
-            && self::answersFor($user->email);
+        return self::governing($user) !== null;
     }
 
     /**

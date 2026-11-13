@@ -21,9 +21,10 @@ class SaveTeamConnection
      *
      * Nothing here contacts the provider: the address is whatever the team's
      * owner typed, and the server only talks to it once a platform admin has
-     * approved the connection. Changing who the provider is, which domains
-     * it answers for, or whether unconfirmed addresses are taken withdraws an
-     * approval; changing only the client's id or secret does not.
+     * approved the connection. Changing what the provider is called, who it
+     * is, which domains it answers for, or whether unconfirmed addresses are
+     * taken withdraws an approval; changing only the client's id or secret
+     * does not.
      *
      * The caller has checked that $by may manage the team's single sign-on.
      *
@@ -68,8 +69,9 @@ class SaveTeamConnection
                 $connection->client_secret = $data['client_secret'];
             }
 
-            // What an admin approved was this issuer answering for these domains on these terms.
-            if ($connection->isDirty(['issuer', 'domains', 'require_verified_email'])) {
+            // What an admin approved was a provider of this name at this issuer,
+            // answering for these domains on these terms.
+            if ($connection->isDirty(SsoConnection::APPROVED)) {
                 $connection->forceFill(['approved_at' => null, 'approved_by' => null]);
             }
             $connection->save();

@@ -73,6 +73,7 @@ class SignInThroughProvider
                 $user = $identity->user;
                 $this->refuseIfSuspended($user);
                 $this->refuseOwners($connection, $user->email);
+                $this->refuseAdminsOfTheInstall($connection, $user);
                 // The provider answers for certain domains only. An account it
                 // made that has since left them is not its to sign in to.
                 if (! $connection->answersFor($user->email)) {
@@ -92,6 +93,7 @@ class SignInThroughProvider
                 $user = $this->create($claims, $email);
             } else {
                 $this->refuseIfSuspended($user);
+                $this->refuseAdminsOfTheInstall($connection, $user);
                 if ($user->is_demo || $user->identities()->where('issuer', $connection->issuer)->exists()) {
                     // The address was someone else's at the provider before. Their account is not handed on.
                     throw new SsoException(__('An account with your address already belongs to another person at :name. Ask the people who run this service to sort it out.', ['name' => $connection->name]));
@@ -170,6 +172,20 @@ class SignInThroughProvider
     {
         if ($this->isOwnerAddress($email)) {
             throw new SsoException(__('This address belongs to the people who run this service. It signs in with its password or passkey, not with :name.', ['name' => $connection->name]));
+        }
+    }
+
+    /**
+     * A team's provider is somebody's own, approved for the team's domains.
+     * It does not get to sign anyone in as an admin of the whole install,
+     * whatever address that admin has.
+     *
+     * @throws SsoException
+     */
+    private function refuseAdminsOfTheInstall(Connection $connection, User $user): void
+    {
+        if ($connection->teamId !== null && $user->is_admin) {
+            throw new SsoException(__('This account administers the service. It signs in with its password or passkey, not with :name.', ['name' => $connection->name]));
         }
     }
 

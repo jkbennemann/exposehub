@@ -69,7 +69,7 @@ final class OidcClient
             'redirect_uri' => Sso::redirectUri(),
             'code_verifier' => $verifier,
         ];
-        $request = $this->http()->asForm();
+        $request = $this->http($connection, $discovery['token_endpoint'])->asForm();
         $methods = $discovery['token_endpoint_auth_methods_supported'] ?? ['client_secret_basic'];
         if (is_array($methods) && ! in_array('client_secret_basic', $methods, true) && in_array('client_secret_post', $methods, true)) {
             $form += ['client_id' => $connection->clientId, 'client_secret' => $connection->clientSecret];
@@ -97,7 +97,7 @@ final class OidcClient
         $incomplete = $claims->email === null || ! property_exists($token, 'email_verified');
         if ($incomplete && is_string($response->json('access_token')) && isset($discovery['userinfo_endpoint'])) {
             try {
-                $claims = $this->withUserinfo($claims, $discovery['userinfo_endpoint'], $response->json('access_token'));
+                $claims = $this->withUserinfo($connection, $claims, $discovery['userinfo_endpoint'], $response->json('access_token'));
             } catch (SsoException $e) {
                 // Without an address there is nothing to go on. With one, the
                 // token's own word stands, which is that it is not confirmed.
@@ -191,10 +191,10 @@ final class OidcClient
     /**
      * @throws SsoException
      */
-    private function withUserinfo(Claims $claims, string $endpoint, string $accessToken): Claims
+    private function withUserinfo(Connection $connection, Claims $claims, string $endpoint, string $accessToken): Claims
     {
         try {
-            $info = $this->http()->withToken($accessToken)->get($endpoint);
+            $info = $this->http($connection, $endpoint)->withToken($accessToken)->get($endpoint);
         } catch (Throwable $e) {
             throw new SsoException(__(self::FAILED), 'userinfo endpoint unreachable: '.$e->getMessage());
         }
@@ -245,9 +245,10 @@ final class OidcClient
     {
         $issuer = $connection->issuer;
 
-        return Cache::remember('exposehub.sso.discovery.'.sha1($issuer), self::CACHE_SECONDS, function () use ($issuer) {
+        return Cache::remember('exposehub.sso.discovery.'.sha1($issuer), self::CACHE_SECONDS, function () use ($connection, $issuer) {
             try {
-                $response = $this->http()->get(rtrim($issuer, '/').'/.well-known/openid-configuration');
+                $address = rtrim($issuer, '/').'/.well-known/openid-configuration';
+                $response = $this->http($connection, $address)->get($address);
             } catch (Throwable $e) {
                 throw new SsoException(__(self::FAILED), 'discovery unreachable: '.$e->getMessage());
             }
@@ -256,11 +257,11 @@ final class OidcClient
                 throw new SsoException(__(self::FAILED), 'discovery answered '.$response->status().' or names another issuer');
             }
             foreach (['authorization_endpoint', 'token_endpoint', 'jwks_uri'] as $key) {
-                if (! is_string($document[$key] ?? null) || ! $this->asSafeAs($issuer, $document[$key])) {
+                if (! is_string($document[$key] ?? null) || ! $this->asSafeAs($connection, $document[$key])) {
                     throw new SsoException(__(self::FAILED), "discovery has no usable {$key}");
                 }
             }
-            if (isset($document['userinfo_endpoint']) && (! is_string($document['userinfo_endpoint']) || ! $this->asSafeAs($issuer, $document['userinfo_endpoint']))) {
+            if (isset($document['userinfo_endpoint']) && (! is_string($document['userinfo_endpoint']) || ! $this->asSafeAs($connection, $document['userinfo_endpoint']))) {
                 unset($document['userinfo_endpoint']);
             }
 
@@ -269,14 +270,16 @@ final class OidcClient
     }
 
     /**
-     * An endpoint must use https, unless the issuer itself is plain http, as
-     * a provider run on the same machine for trying things out is.
+     * An endpoint must use https. The install's own provider may be plain
+     * http when its issuer is, as one run on the same machine for trying
+     * things out is; a team's provider never is.
      */
-    private function asSafeAs(string $issuer, string $url): bool
+    private function asSafeAs(Connection $connection, string $url): bool
     {
         $scheme = Str::lower((string) parse_url($url, PHP_URL_SCHEME));
 
-        return $scheme === 'https' || ($scheme === 'http' && Str::startsWith(Str::lower($issuer), 'http://'));
+        return $scheme === 'https'
+            || ($scheme === 'http' && $connection->teamId === null && Str::startsWith(Str::lower($connection->issuer), 'http://'));
     }
 
     /**
@@ -295,7 +298,8 @@ final class OidcClient
 
         $set = Cache::remember($cache, self::CACHE_SECONDS, function () use ($connection) {
             try {
-                $response = $this->http()->get($this->discovery($connection)['jwks_uri']);
+                $address = $this->discovery($connection)['jwks_uri'];
+                $response = $this->http($connection, $address)->get($address);
             } catch (Throwable $e) {
                 throw new SsoException(__(self::FAILED), 'keys unreachable: '.$e->getMessage());
             }
@@ -337,9 +341,35 @@ final class OidcClient
         return $keys;
     }
 
-    private function http(): PendingRequest
+    /**
+     * A request to $url on behalf of $connection.
+     *
+     * The install's own provider is whatever the operator set, on any
+     * network. A team's provider was typed in by the team's owner, so every
+     * address it names, its discovery document included, has to be https on
+     * the usual port and lead to the public internet; the request then goes
+     * to the address that was checked, not to whatever the name resolves to
+     * a moment later.
+     *
+     * @throws SsoException
+     */
+    private function http(Connection $connection, string $url): PendingRequest
     {
         // Not following redirects: the answer must come from the address that was asked.
-        return Http::timeout(8)->connectTimeout(4)->acceptJson()->withoutRedirecting();
+        $request = Http::timeout(8)->connectTimeout(4)->acceptJson()->withoutRedirecting();
+        if ($connection->teamId === null) {
+            return $request;
+        }
+
+        $parts = parse_url($url);
+        $host = is_array($parts) ? Str::lower((string) ($parts['host'] ?? '')) : '';
+        $address = is_array($parts) && Str::lower((string) ($parts['scheme'] ?? '')) === 'https' && ($parts['port'] ?? 443) === 443 && $host !== ''
+            ? app(PublicHost::class)->addressOf($host)
+            : null;
+        if ($address === null) {
+            throw new SsoException(__(self::FAILED), "the provider's address {$host} is not a public https address");
+        }
+
+        return $request->withOptions(['curl' => [CURLOPT_RESOLVE => ["{$host}:443:{$address}"]]]);
     }
 }

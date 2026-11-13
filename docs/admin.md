@@ -74,9 +74,10 @@ With Okta: Applications → Create App Integration → OIDC, Web Application; an
 
 **Approving is the step that matters.** An approved provider signs people in as any address of its domains. Approve only when you know that the domains belong to the people behind the team and that the issuer is their provider; the page shows both, and who entered them. The approval is recorded in the audit log.
 
-- Changing the issuer or the domains, or switching to taking addresses the provider has not confirmed, withdraws the approval until an admin approves again. Changing the client ID or secret does not.
+- An approval is for exactly what the page showed: the team, what the provider is called, its issuer, its domains, and whether it takes addresses it has not confirmed. If the owner changes any of that while you look at the page, the approval is refused and you read the entry again. A later change to any of it withdraws the approval until an admin approves again. Changing the client ID or secret does not.
+- The page says how many accounts already have an address of the domains. They will sign in through the provider and join the team. Admins of the install are the exception: a team's provider never signs one in, and they keep their password.
 - A domain belongs to one provider. A second team cannot be approved for it, and the install's own provider comes first.
-- The issuer has to be an https address on a public host name.
+- The issuer, and every address its discovery document names, has to be https on the usual port and lead to the public internet. A team's provider cannot point the dashboard at an address inside your network. The install's own provider may be anywhere.
 - The client secret is stored encrypted with the application key and is never shown again.
 - An admin can withdraw the approval, and the owner can remove the provider. The accounts and their place in the team stay; they sign in with a password from then on and get one by asking for a reset mail.
 

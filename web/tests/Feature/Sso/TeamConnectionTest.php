@@ -11,6 +11,7 @@ use App\Models\SsoConnection;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\Demo;
+use App\Support\Sso\PublicHost;
 use App\Support\Sso\Sso;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -73,7 +74,7 @@ class TeamConnectionTest extends TestCase
     private function approved(array $changes = []): SsoConnection
     {
         $connection = $this->enter($changes);
-        app(AdminActions::class)->approveSso($this->admin, $connection);
+        app(AdminActions::class)->approveSso($this->admin, $connection, $connection->fingerprint());
 
         return $connection->fresh();
     }
@@ -167,7 +168,7 @@ class TeamConnectionTest extends TestCase
 
         // Only a platform admin approves, on the admin page.
         try {
-            app(AdminActions::class)->approveSso($this->owner, $connection);
+            app(AdminActions::class)->approveSso($this->owner, $connection, $connection->fingerprint());
             $this->fail('The team\'s owner approved their own provider.');
         } catch (AuthorizationException) {
             $this->assertNull($connection->fresh()->approved_at);
@@ -176,7 +177,7 @@ class TeamConnectionTest extends TestCase
         $this->actingAs($this->owner)->get(route('admin.sso'))->assertNotFound();
         $this->actingAs($this->admin)->withSession(['auth.password_confirmed_at' => now()->getTimestamp()]);
         Livewire::test('pages::admin.sso')->assertSee('Blue')->assertSee(self::TEAM_ISSUER)->assertSee('blue.example')
-            ->call('approve', $connection->id);
+            ->call('approve', $connection->id, $connection->fingerprint());
         $this->assertNotNull($connection->fresh()->approved_at);
         $this->assertSame($this->admin->id, $connection->fresh()->approved_by);
         $entry = AdminAction::query()->where('action', 'sso.approved')->sole();
@@ -254,16 +255,20 @@ class TeamConnectionTest extends TestCase
         $this->assertNotNull($save(['clientId' => 'blue-client-2', 'clientSecret' => 'another-secret'])->approved_at);
         $this->assertSame('another-secret', SsoConnection::query()->sole()->client_secret);
         // Leaving the secret empty keeps the stored one.
-        $this->assertSame('another-secret', $save(['name' => 'Okta (Blue)'])->client_secret);
+        $this->assertSame('another-secret', $save(['clientId' => 'blue-client-3'])->client_secret);
         $this->assertNotNull(SsoConnection::query()->sole()->approved_at);
+
+        // The name is what people read in messages and mails about their account: a new one is approved again.
+        $this->assertNull($save(['name' => 'Install IT (call 555 0100)'])->approved_at);
+        app(AdminActions::class)->approveSso($this->admin, SsoConnection::query()->sole(), SsoConnection::query()->sole()->fingerprint());
 
         $this->assertNull($save(['domains' => 'blue.example, raidboxes.example'])->approved_at);
         $this->assertFalse(Sso::enabled());
         $this->get(route('sso.redirect', ['address' => 'ada@blue.example']))->assertNotFound();
 
-        app(AdminActions::class)->approveSso($this->admin, SsoConnection::query()->sole());
+        app(AdminActions::class)->approveSso($this->admin, SsoConnection::query()->sole(), SsoConnection::query()->sole()->fingerprint());
         $this->assertNull($save(['issuer' => 'https://login.other.example.org'])->approved_at);
-        app(AdminActions::class)->approveSso($this->admin, SsoConnection::query()->sole());
+        app(AdminActions::class)->approveSso($this->admin, SsoConnection::query()->sole(), SsoConnection::query()->sole()->fingerprint());
         $this->assertNull($save(['takesUnconfirmedAddresses' => true])->approved_at);
     }
 
@@ -282,7 +287,7 @@ class TeamConnectionTest extends TestCase
         $claim = SsoConnection::query()->where('team_id', $other->id)->sole();
 
         try {
-            app(AdminActions::class)->approveSso($this->admin, $claim);
+            app(AdminActions::class)->approveSso($this->admin, $claim, $claim->fingerprint());
             $this->fail('A second provider was approved for a domain that has one.');
         } catch (AuthorizationException $e) {
             $this->assertStringContainsString('blue.example', $e->getMessage());
@@ -292,7 +297,7 @@ class TeamConnectionTest extends TestCase
         // The install's own provider takes precedence in the same way.
         config(['exposehub.sso.issuer' => self::ISSUER, 'exposehub.sso.domains' => ['rival.example']]);
         try {
-            app(AdminActions::class)->approveSso($this->admin, $claim);
+            app(AdminActions::class)->approveSso($this->admin, $claim, $claim->fingerprint());
             $this->fail('A team was approved for a domain of the install\'s own provider.');
         } catch (AuthorizationException) {
         }
@@ -340,7 +345,7 @@ class TeamConnectionTest extends TestCase
         $this->assertTrue(AgentToken::query()->usable()->whereKey($token->id)->exists());
         $this->assertFalse(Sso::requiredFor($ada));
 
-        app(AdminActions::class)->approveSso($this->admin, $connection->fresh());
+        app(AdminActions::class)->approveSso($this->admin, $connection->fresh(), $connection->fresh()->fingerprint());
         $this->actingAs($this->owner);
         Livewire::test('pages::teams.sso', ['team' => $this->team])->call('remove');
         $this->assertSame(0, SsoConnection::query()->count());
@@ -375,5 +380,144 @@ class TeamConnectionTest extends TestCase
 
         $this->signInAt('ada@blue.example');
         $this->assertSame([$ownerToken->id, $adaToken->id], $accepted());
+    }
+
+    /**
+     * Found by the second security review: the page showed one thing and the
+     * click approved whatever was stored by then. The team's owner swapped the
+     * domains in between and was approved for a company that was not theirs.
+     */
+    public function test_an_admin_approves_what_they_were_shown_and_nothing_that_changed_since(): void
+    {
+        $boss = User::factory()->create(['email' => 'boss@victim-corp.example', 'is_admin' => true]);
+        $this->enter(['domains' => 'red-corp.example']);
+        $shown = SsoConnection::query()->sole();
+
+        // The admin has the page open, with what was entered.
+        $this->actingAs($this->admin)->withSession(['auth.password_confirmed_at' => now()->getTimestamp()]);
+        $page = Livewire::test('pages::admin.sso')->assertSee('red-corp.example');
+
+        // Meanwhile the owner asks for someone else's domain.
+        Livewire::actingAs($this->owner)->test('pages::teams.sso', ['team' => $this->team])->set('domains', 'victim-corp.example')->call('save')->assertHasNoErrors();
+
+        $this->actingAs($this->admin);
+        $page->call('approve', $shown->id, $shown->fingerprint());
+
+        $this->assertNull(SsoConnection::query()->sole()->approved_at);
+        $this->assertFalse(Sso::enabled());
+        $this->assertSame(0, AdminAction::query()->where('action', 'sso.approved')->count());
+        try {
+            app(AdminActions::class)->approveSso($this->admin, $shown, $shown->fingerprint());
+            $this->fail('An entry that changed after it was shown was approved.');
+        } catch (AuthorizationException $e) {
+            $this->assertStringContainsString('changed after you opened the page', $e->getMessage());
+        }
+
+        // Approving what is there now takes reading it: the fingerprint of the entry as it stands.
+        $now = SsoConnection::query()->sole();
+        $this->assertNotSame($shown->fingerprint(), $now->fingerprint());
+        app(AdminActions::class)->approveSso($this->admin, $now, $now->fingerprint());
+        $this->assertNotNull($now->fresh()->approved_at);
+        $this->assertTrue($boss->fresh()->is_admin);
+    }
+
+    /**
+     * Also from that review: an approved domain handed every account on it
+     * to the team's provider, admins of the install included.
+     */
+    public function test_a_teams_provider_never_signs_in_an_admin_of_the_install(): void
+    {
+        config(['exposehub.node_secret' => 'node-secret-for-tests']);
+        $boss = User::factory()->create(['email' => 'boss@blue.example', 'is_admin' => true]);
+        $colleague = User::factory()->create(['email' => 'grace@blue.example']);
+        $bossToken = app(IssueAgentToken::class)->handle($boss, $boss->currentTeam, 'laptop')[0];
+        $connection = $this->enter();
+
+        // The page says what an approval hands over, and what it does not.
+        $this->actingAs($this->admin)->withSession(['auth.password_confirmed_at' => now()->getTimestamp()]);
+        Livewire::test('pages::admin.sso')
+            ->assertSee('2 accounts already have such an address')
+            ->assertSee('One of them administers this service and stays out of it');
+        app(AdminActions::class)->approveSso($this->admin, $connection, $connection->fingerprint());
+        $this->post(route('logout'));
+
+        // The provider vouches for the admin's address: no sign-in, no tie, no place in the team.
+        $this->signInAt('boss@blue.example')->assertRedirect(route('login'))->assertSessionHasErrors('sso');
+        $this->assertGuest();
+        $this->assertSame(0, $boss->identities()->count());
+        $this->assertFalse($boss->fresh()->belongsToTeam($this->team));
+
+        // The admin keeps the password, and tokens that outlast the provider's days.
+        $this->assertFalse(Sso::requiredFor($boss));
+        $this->post(route('login.store'), ['email' => $boss->email, 'password' => 'password']);
+        $this->get(route('dashboard', ['current_team' => $boss->currentTeam->slug]))->assertOk();
+        $this->post(route('logout'));
+        $this->travel(40)->days();
+        $accepted = collect($this->withToken('node-secret-for-tests')->getJson(route('internal.snapshot'))->assertOk()->json('tokens'))->pluck('id')->all();
+        $this->assertContains($bossToken->id, $accepted);
+
+        // An ordinary colleague of the domain is the provider's, as approved.
+        $this->assertTrue(Sso::requiredFor($colleague));
+        $this->signInAt('grace@blue.example');
+        $this->assertAuthenticatedAs($colleague);
+    }
+
+    /**
+     * Also from that review: the issuer was checked by its spelling only, and
+     * the addresses a provider names in its discovery document not at all.
+     */
+    public function test_a_teams_provider_cannot_send_the_server_to_addresses_that_are_not_public(): void
+    {
+        $this->approved();
+        cache()->flush();
+
+        // The issuer's name resolves into the network this service runs in.
+        $this->hostAddresses = ['login.blue.example.org' => null];
+        $this->get(route('sso.redirect', ['address' => 'ada@blue.example']))->assertRedirect(route('login'))->assertSessionHasErrors('sso');
+        Http::assertNothingSent();
+
+        // The issuer is public, but its discovery document names an inside address for the keys and the token.
+        $this->hostAddresses = ['metadata.blue.example.org' => null];
+        $this->discoveryOverrides = ['token_endpoint' => 'https://metadata.blue.example.org/token', 'jwks_uri' => 'https://metadata.blue.example.org/keys'];
+        $sent = $this->startSignIn(['address' => 'ada@blue.example'], self::TEAM_ISSUER);
+        $this->nextIdToken = $this->idToken($sent['nonce'], ['iss' => self::TEAM_ISSUER, 'aud' => 'blue-client', 'email' => 'ada@blue.example']);
+        $this->get(route('sso.callback', ['state' => $sent['state'], 'code' => 'code']))->assertSessionHasErrors('sso');
+        $this->assertGuest();
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'metadata.blue.example.org'));
+
+        // Another port, or no https, is refused the same way.
+        foreach (['https://login.blue.example.org:8443/token', 'http://login.blue.example.org/token'] as $endpoint) {
+            cache()->flush();
+            $this->hostAddresses = [];
+            $this->discoveryOverrides = ['token_endpoint' => $endpoint];
+            $sent = $this->get(route('sso.redirect', ['address' => 'ada@blue.example']));
+            if ($sent->isRedirect(route('login'))) {
+                continue;
+            }
+            parse_str((string) parse_url((string) $sent->headers->get('Location'), PHP_URL_QUERY), $query);
+            $this->nextIdToken = $this->idToken($query['nonce'], ['iss' => self::TEAM_ISSUER, 'aud' => 'blue-client', 'email' => 'ada@blue.example']);
+            $this->get(route('sso.callback', ['state' => $query['state'], 'code' => 'code']))->assertSessionHasErrors('sso');
+            $this->assertGuest();
+        }
+
+        // The install's own provider is the operator's and may be anywhere, also inside.
+        cache()->flush();
+        $this->discoveryOverrides = [];
+        $this->hostAddresses = ['id.example.org' => null];
+        config(['exposehub.sso.issuer' => self::ISSUER, 'exposehub.sso.domains' => ['corp.example']]);
+        $this->signInThroughProvider();
+        $this->assertAuthenticated();
+    }
+
+    public function test_only_addresses_on_the_public_internet_count_as_public(): void
+    {
+        $host = new PublicHost;
+
+        foreach (['10.0.0.5', '172.16.4.1', '192.168.1.1', '127.0.0.1', '169.254.169.254', '100.64.0.1', '100.127.255.254', '0.0.0.0', '::1', 'fe80::1', 'fd00::1', '::ffff:10.0.0.5'] as $inside) {
+            $this->assertFalse($host->isPublic($inside), $inside.' counts as public');
+        }
+        foreach (['93.184.216.34', '100.63.255.255', '100.128.0.1', '2606:2800:220:1:248:1893:25c8:1946'] as $outside) {
+            $this->assertTrue($host->isPublic($outside), $outside.' does not count as public');
+        }
     }
 }

@@ -155,28 +155,40 @@ class AdminActions
      * people in as any address of its domains and makes them members of the
      * team, so this is the moment someone answers for the domains being the
      * team's to claim.
+     *
+     * @param  string  $seen  the fingerprint of the entry as the admin was shown it
      */
-    public function approveSso(User $admin, SsoConnection $connection): void
+    public function approveSso(User $admin, SsoConnection $connection, string $seen): void
     {
         $this->authorizeAdmin($admin);
-        if ($connection->approved_at !== null) {
-            return;
-        }
 
-        $domains = Sso::normalizeDomains($connection->domains);
-        $taken = Sso::connections()
-            ->reject(fn (Connection $other) => $other->teamId === $connection->team_id)
-            ->flatMap(fn (Connection $other) => $other->domains)
-            ->intersect($domains);
-        if ($taken->isNotEmpty()) {
-            throw new AuthorizationException(__('Another identity provider already answers for :domains. A domain belongs to one provider.', ['domains' => $taken->join(', ')]));
-        }
+        DB::transaction(function () use ($admin, $connection, $seen) {
+            // Locked and read again: the team's owner can change the entry
+            // at any time, also between the admin reading it and clicking.
+            $current = SsoConnection::query()->whereKey($connection->id)->lockForUpdate()->firstOrFail();
+            if ($current->approved_at !== null) {
+                return;
+            }
+            // $seen is what the admin was shown. They approve that, and nothing else.
+            if (! hash_equals($current->fingerprint(), $seen)) {
+                throw new AuthorizationException(__('This entry was changed after you opened the page. Read it again before you approve it.'));
+            }
 
-        $connection->forceFill(['approved_at' => now(), 'approved_by' => $admin->id])->save();
+            $domains = Sso::normalizeDomains($current->domains);
+            $taken = Sso::connections()
+                ->reject(fn (Connection $other) => $other->teamId === $current->team_id)
+                ->flatMap(fn (Connection $other) => $other->domains)
+                ->intersect($domains);
+            if ($taken->isNotEmpty()) {
+                throw new AuthorizationException(__('Another identity provider already answers for :domains. A domain belongs to one provider.', ['domains' => $taken->join(', ')]));
+            }
 
-        AdminAction::record($admin, 'sso.approved', $connection, $connection->team->name, [
-            'issuer' => $connection->issuer, 'domains' => $domains, 'unconfirmed_addresses' => ! $connection->require_verified_email,
-        ]);
+            $current->forceFill(['approved_at' => now(), 'approved_by' => $admin->id])->save();
+
+            AdminAction::record($admin, 'sso.approved', $current, $current->team->name, [
+                'name' => $current->name, 'issuer' => $current->issuer, 'domains' => $domains, 'unconfirmed_addresses' => ! $current->require_verified_email,
+            ]);
+        });
     }
 
     /**

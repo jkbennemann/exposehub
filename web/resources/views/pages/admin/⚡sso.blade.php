@@ -3,6 +3,7 @@
 use App\Actions\Admin\AdminActions;
 use App\Concerns\RequiresAdmin;
 use App\Models\SsoConnection;
+use App\Models\User;
 use App\Support\Sso\Sso;
 use Flux\Flux;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -24,10 +25,31 @@ new #[Title('Single sign-on')] #[RequiresAdmin] class extends Component {
             ->orderByRaw('approved_at is not null')->latest('updated_at')->get();
     }
 
-    public function approve(int $id, AdminActions $actions): void
+    /**
+     * @param  string  $seen  the fingerprint of the entry as this page showed it
+     */
+    public function approve(int $id, string $seen, AdminActions $actions): void
     {
-        $this->act(fn (SsoConnection $provider) => $actions->approveSso(Auth::user(), $provider), $id,
+        $this->act(fn (SsoConnection $provider) => $actions->approveSso(Auth::user(), $provider, $seen), $id,
             __('Approved. People can sign in through it now.'));
+    }
+
+    /**
+     * The accounts that already have an address of one of the entry's
+     * domains, and how many of them administer the install: what an approval
+     * hands to the provider.
+     *
+     * @return array{accounts: int, admins: int}
+     */
+    public function existing(SsoConnection $provider): array
+    {
+        $accounts = User::query()->where('is_demo', false)->where(function ($users) use ($provider) {
+            foreach (Sso::normalizeDomains($provider->domains) as $domain) {
+                $users->orWhereRaw("lower(email) like ? escape '!'", ['%@'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $domain)]);
+            }
+        })->get(['id', 'email', 'is_admin', 'email_verified_at', 'suspended_at']);
+
+        return ['accounts' => $accounts->count(), 'admins' => $accounts->filter(fn (User $user) => $user->isAdmin() || $user->hasOwnerAddress())->count()];
     }
 
     public function revoke(int $id, AdminActions $actions): void
@@ -72,7 +94,7 @@ new #[Title('Single sign-on')] #[RequiresAdmin] class extends Component {
                             <flux:button size="sm" variant="ghost" wire:click="revoke({{ $provider->id }})" wire:confirm="{{ __('Withdraw the approval? Nobody can sign in through this provider until it is approved again.') }}" data-test="admin-sso-revoke">{{ __('Withdraw') }}</flux:button>
                         </div>
                     @else
-                        <flux:button size="sm" variant="primary" wire:click="approve({{ $provider->id }})" wire:confirm="{{ __('Approve this provider for :domains?', ['domains' => implode(', ', $provider->domains)]) }}" data-test="admin-sso-approve">{{ __('Approve') }}</flux:button>
+                        <flux:button size="sm" variant="primary" wire:click="approve({{ $provider->id }}, '{{ $provider->fingerprint() }}')" wire:confirm="{{ __('Approve :name at :issuer for :domains?', ['name' => $provider->name, 'issuer' => $provider->issuer, 'domains' => implode(', ', $provider->domains)]) }}" data-test="admin-sso-approve">{{ __('Approve') }}</flux:button>
                     @endif
                 </div>
                 <dl class="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-sm">
@@ -80,6 +102,14 @@ new #[Title('Single sign-on')] #[RequiresAdmin] class extends Component {
                     <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Issuer') }}</dt><dd class="font-mono [overflow-wrap:anywhere]">{{ $provider->issuer }}</dd>
                     <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Client ID') }}</dt><dd class="font-mono [overflow-wrap:anywhere]">{{ $provider->client_id }}</dd>
                     <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Signs in addresses of') }}</dt><dd class="font-mono">{{ implode(', ', $provider->domains) }}</dd>
+                    @php($existing = $this->existing($provider))
+                    <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Accounts there now') }}</dt>
+                    <dd data-test="admin-sso-existing">
+                        {{ trans_choice('{0} none with such an address yet|{1} one account already has such an address; it will sign in through this provider and join the team|[2,*] :n accounts already have such an address; they will sign in through this provider and join the team', $existing['accounts'], ['n' => $existing['accounts']]) }}
+                        @if ($existing['admins'] > 0)
+                            <span class="text-fault">{{ trans_choice('{1} One of them administers this service and stays out of it: an admin is never signed in by a team\'s provider.|[2,*] :n of them administer this service and stay out of it: an admin is never signed in by a team\'s provider.', $existing['admins'], ['n' => $existing['admins']]) }}</span>
+                        @endif
+                    </dd>
                     @unless ($provider->require_verified_email)
                         <dt class="text-zinc-500 dark:text-zinc-400">{{ __('Mind') }}</dt><dd class="text-fault">{{ __('Takes addresses the provider has not confirmed.') }}</dd>
                     @endunless

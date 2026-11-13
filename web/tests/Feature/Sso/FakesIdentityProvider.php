@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Sso;
 
+use App\Support\Sso\PublicHost;
 use Firebase\JWT\JWT;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
@@ -37,6 +38,13 @@ trait FakesIdentityProvider
     protected int $keySetFetches = 0;
 
     /**
+     * What host names resolve to, where a test wants something other than a public address: null for one that is not public.
+     *
+     * @var array<string, string|null>
+     */
+    public array $hostAddresses = [];
+
+    /**
      * The issuers the fake provider answers at.
      *
      * @var array<int, string>
@@ -57,6 +65,17 @@ trait FakesIdentityProvider
         ]);
         Cache::flush();
         $this->providerKey('key-1');
+
+        // Host names in tests resolve nowhere; the fake provider is on the public internet unless a test says otherwise.
+        $this->app->instance(PublicHost::class, new class($this) extends PublicHost
+        {
+            public function __construct(private object $test) {}
+
+            public function addressOf(string $host): ?string
+            {
+                return array_key_exists($host, $this->test->hostAddresses) ? $this->test->hostAddresses[$host] : '203.0.113.10';
+            }
+        });
 
         Http::fake(function (Request $request) {
             // The same provider software answers at every issuer a test has set up.

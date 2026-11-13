@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Sso\Sso;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,6 +41,29 @@ class SsoConnection extends Model
     public function scopeActive(Builder $query): void
     {
         $query->whereNotNull('approved_at')->whereHas('team');
+    }
+
+    /**
+     * What a platform admin answers for by approving: this team, a provider
+     * of this name at this issuer, for these domains, on these terms. Any
+     * change to one of them is a different thing to approve. The client's id
+     * and secret are not part of it: they change when a secret is renewed,
+     * and stay with the same provider.
+     *
+     * @var array<int, string>
+     */
+    public const array APPROVED = ['name', 'issuer', 'domains', 'require_verified_email'];
+
+    /**
+     * A fingerprint of what is approved, so that an approval can name what
+     * the admin was shown and be refused if that has changed since.
+     */
+    public function fingerprint(): string
+    {
+        $domains = Sso::normalizeDomains($this->domains);
+        sort($domains);
+
+        return hash('sha256', (string) json_encode([$this->team_id, $this->name, $this->issuer, $domains, $this->require_verified_email]));
     }
 
     /**
