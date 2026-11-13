@@ -117,7 +117,7 @@ Other values worth knowing, all documented in the chart's `values.yaml`:
 | `web.allowedEmailDomains` | empty | Limit registration to these email domains |
 | `web.logRetentionDays` | `7` | How long request logs are kept |
 | `web.sso.issuer`, `web.sso.clientId`, `web.sso.domains`, `secrets.ssoClientSecret` | empty | Single sign-on over OpenID Connect: on once all four are set. Accounts of those email domains then sign in through the provider only. `web.sso.name`, `tokenDays` and `requireVerifiedEmail` are optional; [admin.md](../admin.md) explains them |
-| `web.sso.providerHosts` | empty | Only with `networkPolicy.type: cilium`: the hosts of identity providers the dashboard may call, the teams' providers included. See [Network policies](#network-policies) |
+| `web.sso.providerHosts` | empty | Only with `networkPolicy.type: cilium`: the hosts of identity providers the dashboard may call, the teams' providers included. See [Single sign-on](#single-sign-on) |
 | `web.demo.enabled` | `false` | Offers "Try the demo" on the landing page: visitors without an account, wiped every `web.demo.resetMinutes`. Read [admin.md](../admin.md) first; `server.demoMaxTunnels` and `server.demoRequestsPerMinute` limit its tunnels |
 | `server.additionalTunnelDomains` | `[]` | More domains tunnels can use; each needs its own wildcard record |
 | `web.sourceUrl` | upstream | Where the dashboard's source link points. Point it at your fork if you run a changed version, so people can see what the install runs. |
@@ -147,12 +147,50 @@ Certificates take a minute or two once DNS resolves. Then:
 
 With `web.customDomains.enabled: true`, a team can connect a domain like `dev.example.org`. Once its DNS record is verified, the dashboard creates an Ingress for it in the release's namespace, routed to the tunnel server, and cert-manager issues its certificate through `web.customDomains.clusterIssuer` (default: `web.ingress.tls.clusterIssuer`). That issuer must solve HTTP-01, since the team's DNS is not yours. The chart adds a ServiceAccount whose Role may only get, create, patch and delete Ingress objects in that namespace. The Ingress is named `<fullname>-domain-<id>` (with the release `exposehub`: `exposehub-domain-<id>`) and labelled `exposehub/instance: <fullname>`, and the dashboard changes or deletes only Ingresses that carry its own label, so two releases in one namespace leave each other's alone. `ingress.className` must be set, because the dashboard names it on every Ingress it creates.
 
+## Single sign-on
+
+[admin.md](../admin.md#single-sign-on) describes what single sign-on does and how to set up a provider, for the whole install (`web.sso` and `secrets.ssoClientSecret`) or for one team (entered in the dashboard, no values needed). This section is about the one thing the cluster has to allow.
+
+**The dashboard calls the provider itself.** At every sign-in the dashboard pod fetches the provider's discovery document, exchanges the code for a token and reads the signing keys, all over HTTPS on port 443. The person's browser reaching the provider is not enough.
+
+What that needs depends on `networkPolicy.type`:
+
+- `kubernetes` (the default) and `none`: nothing. The dashboard's outbound traffic is open.
+- `cilium`: the dashboard reaches named hosts only. The host of `web.sso.issuer` is opened by itself. Every other host goes into `web.sso.providerHosts`:
+
+  ```yaml
+  web:
+    sso:
+      providerHosts:
+        - example.okta.com            # Okta: one host
+        - login.microsoftonline.com   # Entra ID: one host
+        - accounts.google.com         # Google: the issuer ...
+        - "*.googleapis.com"          # ... and its token and key hosts; "*" matches within a name
+  ```
+
+  List the issuer's host of each team's provider you approve, and any further host a provider's discovery document names for its token endpoint or keys (`https://<issuer>/.well-known/openid-configuration` shows them; Okta uses one host, Google several). Then `helm upgrade`. A team's owner cannot do this step, so it belongs to approving a provider.
+
+Egress rules of your own (another network plugin's policies, an egress gateway, a firewall in front of the nodes) need the same hosts opened.
+
+**When a host is missing**, signing in ends on the login page with "Signing in did not work", and the dashboard's log has a line like this:
+
+```
+Single sign-on failed: discovery unreachable: cURL error 28: Connection timed out … for https://example.okta.com/.well-known/openid-configuration
+```
+
+To check from inside the pod, with your provider's issuer:
+
+```sh
+kubectl -n exposehub exec deploy/exposehub-web -c web -- php -r \
+  'echo @file_get_contents("https://example.okta.com/.well-known/openid-configuration") === false ? "unreachable" : "reachable", "\n";'
+```
+
 ## Network policies
 
 `networkPolicy.type` is `kubernetes` by default, because the server and the dashboard believe forwarded addresses from `server.trustedProxies` and should be reachable only through the ingress controller (see [Trusted proxies](#trusted-proxies)). It needs `networkPolicy.ingressNamespace`. No single policy is right for every cluster: an ingress controller on the host network, for example, needs `networkPolicy.extraIngressFrom`, and a wrong policy shows up as a dashboard that cannot be reached. The policies only take effect if the cluster's network plugin enforces them (k3s, Calico and Cilium do; plain Flannel does not).
 
 - `kubernetes`: standard NetworkPolicy. The server is reachable only from `networkPolicy.ingressNamespace` and may only reach the dashboard and DNS. The dashboard is reachable from the ingress controller and the server. Postgres is reachable only from the dashboard. The dashboard's outbound traffic stays open, because mail, the breached-password check and the Kubernetes API cannot be named by a standard policy. Add `networkPolicy.extraIngressFrom` when the ingress controller uses the host network.
-- `cilium`: the same rules as CiliumNetworkPolicy, plus outbound traffic from the dashboard limited to Postgres, DNS, the breached-password service and the identity providers by name, the API server (custom domains) and the SMTP port. For single sign-on the dashboard calls the provider itself (discovery, the token exchange, the signing keys). The host of `web.sso.issuer` is opened by itself; every other host goes into `web.sso.providerHosts`: further hosts the provider's discovery document names, and the hosts of each team's provider an admin approves. A provider whose host is missing fails at sign-in, with `discovery unreachable` in the dashboard's log.
+- `cilium`: the same rules as CiliumNetworkPolicy, plus outbound traffic from the dashboard limited to Postgres, DNS, the breached-password service and the identity providers by name, the API server (custom domains) and the SMTP port. For single sign-on the dashboard calls the provider itself (discovery, the token exchange, the signing keys). The host of `web.sso.issuer` is opened by itself; every other host goes into `web.sso.providerHosts`: further hosts the provider's discovery document names, and the hosts of each team's provider an admin approves. See [Single sign-on](#single-sign-on).
 - `none`: no policies. Every pod in the cluster can reach the server and the dashboard, so `server.trustedProxies` must then name only the ingress controller's own addresses.
 
 ## HSTS

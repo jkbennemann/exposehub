@@ -31,6 +31,10 @@ The chart version, the image tags and the agent all carry the same version numbe
 
 The dashboard's certificate comes from `web.ingress.tls.clusterIssuer` or `web.ingress.tls.issuer` (HTTP-01 is enough), or from a secret you provide.
 
+## Single sign-on
+
+The dashboard calls the identity provider itself (discovery, token exchange, signing keys) on port 443. With `networkPolicy.type: cilium` it reaches named hosts only: the host of `web.sso.issuer` is opened by itself, and `web.sso.providerHosts` lists the rest, the hosts of each team's provider an admin approves included. The other policy types leave the dashboard's outbound traffic open. [docs/self-hosting/kubernetes.md](../../../docs/self-hosting/kubernetes.md#single-sign-on) has the details and a check.
+
 ## Limits and outages
 
 - `web.limits` caps how many teams one person owns (10), how many addresses one person saves (25), and how many networks (25) and own domains (25) one team has. It also caps the mail anyone can make the dashboard send: sign-ups per IP address and hour (5; each mails a confirmation link), and password-reset mails per hour per IP address (10) and per email address (3). Everyone behind one shared office address counts as one IP address, so raise `registrationsPerIpPerHour` if many people sign up from there at once. `0` allows none. Per account, it limits wrong passwords inside a signed-in session (`passwordChecksPerMinute`, 5) and two-factor codes per sign-in (`twoFactorAttemptsPerMinute`, 5; `twoFactorAttemptsPerDay`, 20); after `twoFactorFailuresInARow` (5) wrong codes the sign-in starts over with the password and the account holder gets a mail. These four must be at least 1.

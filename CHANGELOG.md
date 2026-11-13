@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The self-hosting guides say what single sign-on needs from the network: the dashboard calls the provider itself on port 443, which hosts to open where outbound traffic is limited, what the log says when one is missing, and a command to check from inside the container.
+
 ## [0.3.1] - 2026-11-13
 
 ### Fixed

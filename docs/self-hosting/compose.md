@@ -105,6 +105,7 @@ Run `./install.sh --reconfigure` to answer the questions again with the current 
 - **Limits:** one person owns at most 10 teams and saves at most 25 addresses; one team has at most 25 networks and 25 own domains. `EXPOSEHUB_MAX_TEAMS_PER_USER`, `EXPOSEHUB_MAX_SAVED_ADDRESSES_PER_USER`, `EXPOSEHUB_MAX_NETWORKS_PER_TEAM` and `EXPOSEHUB_MAX_DOMAINS_PER_TEAM` change them; `0` allows none.
 - **Sign-up and reset mails:** one IP address can sign up 5 times an hour (`EXPOSEHUB_MAX_REGISTRATIONS_PER_IP_PER_HOUR`), and password-reset mails are limited to 10 an hour per IP address (`EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_IP_PER_HOUR`) and 3 per email address (`EXPOSEHUB_MAX_PASSWORD_RESET_LINKS_PER_ADDRESS_PER_HOUR`). Everyone behind one shared office address counts as one IP address, so if many colleagues sign up at once, raise the sign-up limit in `.env`, for example to 50, and run `docker compose up -d --wait`.
 - **Password and two-factor guessing:** per account, a signed-in session may enter 5 wrong passwords a minute (password confirmation, account deletion, password change; `EXPOSEHUB_MAX_PASSWORD_CHECKS_PER_MINUTE`), and a sign-in may try 5 two-factor codes a minute (`EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_MINUTE`) and 20 a day (`EXPOSEHUB_MAX_TWO_FACTOR_ATTEMPTS_PER_DAY`). After 5 wrong codes in a row (`EXPOSEHUB_MAX_TWO_FACTOR_FAILURES_IN_A_ROW`) the sign-in starts over with the password and the account holder gets a mail. Keep each at 1 or more; 0 would lock everyone out.
+- **Single sign-on:** [admin.md](../admin.md#single-sign-on) has the setup, for the whole install (the `EXPOSEHUB_SSO_*` settings in `.env`) or for one team (entered in the dashboard). Either way the `web` container calls the provider itself at every sign-in, over HTTPS on port 443: the discovery document, the token exchange and the signing keys. The Compose setup lets it out; a firewall on the host or in front of it that limits outbound traffic has to allow the provider's hosts, those of each team's provider included. See [Troubleshooting](#troubleshooting) for how to check.
 - **When the dashboard is down:** the tunnel server keeps a copy of the dashboard's token list, so agents keep working through a restart of the dashboard. If it cannot refresh that copy for longer than `EXPOSEHUB_CONTROL_PLANE_MAX_STALE` (default `5m`), it closes the tunnels opened with dashboard tokens and refuses those tokens until the dashboard answers again; otherwise a token revoked in the meantime would keep working. The agents reconnect by themselves once it is back. Static tokens keep working throughout. The admin overview shows when this happens. `0` keeps the last list forever.
 - **Caddy:** the configuration is in `caddy/`. Changes there are overwritten by the next upgrade, so open an issue if you need something it cannot do.
 
@@ -193,5 +194,12 @@ On Linux, `SSL_CERT_FILE=./caddy-root.crt exposehub ...` makes the agent trust i
 **The subnet collides with a network of yours.** Set `EXPOSEHUB_SUBNET` and `EXPOSEHUB_CADDY_ADDRESS` (an address inside it) in `.env`, then `docker compose down && docker compose up -d --wait`.
 
 **Mails do not arrive.** `docker compose logs web | grep -i mail`. With `MAIL_MAILER=log`, mails are written there instead of sent.
+
+**Single sign-on ends with "Signing in did not work".** `docker compose logs web | grep 'Single sign-on failed'` says why. `discovery unreachable` means the `web` container cannot reach the provider: check outbound HTTPS from the host, and that the issuer is written exactly as the provider publishes it. With your provider's issuer:
+
+```sh
+docker compose exec web php -r \
+  'echo @file_get_contents("https://example.okta.com/.well-known/openid-configuration") === false ? "unreachable" : "reachable", "\n";'
+```
 
 **Start over.** `docker compose down -v` deletes all containers and volumes, including the database and the certificates; `.env` stays.
