@@ -47,6 +47,33 @@ class LandingPageTest extends TestCase
         $this->assertFileExists(public_path('og.png'));
     }
 
+    /**
+     * Chat apps show the site's icon beside the preview, and they read the
+     * .ico and the touch icon, not the SVG. Both shipped as the framework's
+     * own logo once.
+     */
+    public function test_the_icons_chat_apps_and_phones_read_are_the_products_own(): void
+    {
+        $this->get(route('home'))->assertOk()
+            ->assertSee('<link rel="icon" href="/favicon.ico" sizes="any">', false)
+            ->assertSee('<link rel="apple-touch-icon" href="/apple-touch-icon.png">', false);
+
+        // An .ico with the three sizes browsers and chat apps ask for.
+        $ico = (string) file_get_contents(public_path('favicon.ico'));
+        $this->assertSame(['reserved' => 0, 'type' => 1, 'count' => 3], unpack('vreserved/vtype/vcount', $ico));
+        $this->assertSame([16, 32, 48], array_map(fn (int $entry) => ord($ico[6 + 16 * $entry]), [0, 1, 2]));
+
+        // The touch icon at the size iOS asks for, not the framework's file.
+        $this->assertSame([180, 180], array_slice((array) getimagesize(public_path('apple-touch-icon.png')), 0, 2));
+        $frameworks = [
+            'favicon.ico' => '4606a56e6ef3f5ec39201497f57069d5457ce9cea25227134d0ba378788e9070',
+            'apple-touch-icon.png' => '4001aa032ff113e1a268a9bbf1ab0fd9949439f9f54a85895956eb323aba977d',
+        ];
+        foreach ($frameworks as $file => $hash) {
+            $this->assertNotSame($hash, hash_file('sha256', public_path($file)), $file.' is the framework\'s default icon.');
+        }
+    }
+
     public function test_every_scene_of_the_film_has_a_control_and_something_to_show(): void
     {
         $html = $this->get(route('home'))->getContent();
