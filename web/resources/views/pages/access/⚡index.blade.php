@@ -125,8 +125,13 @@ new #[Title('Access')] #[RequiresTeamMembership] class extends Component {
         return $names->isEmpty() ? __('no network yet, so nobody') : $names->join(', ', __(' and '));
     }
 
-    /** May the signed-in person change the rule of this saved address? */
-    public function mayEdit(SavedAddress $address): bool
+    /**
+     * May the signed-in person change the rule of this saved address?
+     *
+     * Not public: a public method can be called from the browser with any
+     * id, and the answer would tell which saved addresses exist in other teams.
+     */
+    protected function mayEdit(SavedAddress $address): bool
     {
         return $this->canManage || $address->user_id === Auth::id();
     }

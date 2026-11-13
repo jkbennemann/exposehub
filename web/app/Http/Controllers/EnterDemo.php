@@ -49,8 +49,16 @@ class EnterDemo extends Controller
      */
     private function network(string $ip): string
     {
-        $packed = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? inet_pton($ip) : false;
+        $packed = filter_var($ip, FILTER_VALIDATE_IP) !== false ? inet_pton($ip) : false;
+        if (! is_string($packed) || strlen($packed) !== 16) {
+            return $ip;
+        }
+        // An IPv4 address written as IPv6 (::ffff:198.51.100.7) is that IPv4
+        // address; taken as a /64 they would all be one.
+        if (str_starts_with($packed, str_repeat("\0", 10)."\xff\xff")) {
+            return (string) inet_ntop(substr($packed, 12));
+        }
 
-        return is_string($packed) ? bin2hex(substr($packed, 0, 8)).'::/64' : $ip;
+        return bin2hex(substr($packed, 0, 8)).'::/64';
     }
 }

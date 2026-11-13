@@ -189,6 +189,40 @@ class DemoSecurityTest extends TestCase
         $this->assertSame(3, User::query()->where('email', 'like', 'visitor-%')->count());
     }
 
+    public function test_an_ipv4_address_written_as_ipv6_is_counted_as_that_address(): void
+    {
+        config(['exposehub.demo.visitors_per_ip_per_hour' => 1]);
+
+        // Two unrelated visitors whose addresses reach PHP in the mapped form.
+        $this->withServerVariables(['REMOTE_ADDR' => '::ffff:198.51.100.7'])->post(route('demo.enter'));
+        $this->assertAuthenticated();
+        $this->post(route('logout'));
+        $this->withServerVariables(['REMOTE_ADDR' => '::ffff:203.0.113.9'])->post(route('demo.enter'));
+        $this->assertAuthenticated();
+        $this->post(route('logout'));
+
+        // The mapped and the plain form of one address are one visitor.
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->post(route('demo.enter'))
+            ->assertRedirect(route('home'))->assertSessionHas('demo');
+        $this->assertGuest();
+        $this->assertSame(2, User::query()->where('email', 'like', 'visitor-%')->count());
+    }
+
+    public function test_the_access_page_does_not_tell_which_saved_addresses_exist_elsewhere(): void
+    {
+        $other = User::factory()->create();
+        $foreign = $other->currentTeam->savedAddresses()->create(['user_id' => $other->id, 'hostname' => 'theirs.tunnels.example', 'access' => 'default']);
+        $this->visitor();
+        $html = $this->get(route('access.index', ['current_team' => Demo::team()->slug]))->assertOk()->getContent();
+        $snapshot = $this->snapshotOf($html, 'pages::access.index');
+
+        $existing = $this->replay($snapshot, [], [['mayEdit', [$foreign->id]]]);
+        $missing = $this->replay($snapshot, [], [['mayEdit', [$foreign->id + 1000]]]);
+
+        $this->assertSame($missing->status(), $existing->status());
+        $this->assertNotSame(200, $existing->status());
+    }
+
     public function test_an_admin_can_act_on_a_visitor_without_making_them_more_than_one(): void
     {
         config(['exposehub.admin_emails' => ['owner@example.com']]);
