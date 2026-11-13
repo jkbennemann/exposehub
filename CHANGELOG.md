@@ -4,9 +4,16 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-13
+
 ### Added
 
 - Single sign-on over OpenID Connect: Okta, Microsoft Entra ID, Google Workspace, Keycloak and others. A provider can be set for the whole install in the deployment (`EXPOSEHUB_SSO_ISSUER`, a client and the email domains it answers for), or for one team: the team's owner enters it in the team's settings, a platform admin approves it under Admin → Single sign-on, and whoever it signs in becomes a member of that team. Accounts of a provider's domains are made at their first sign-in and sign in through it only; the platform owners keep their password. Their agent tokens work for `EXPOSEHUB_SSO_TOKEN_DAYS` (30) after the last sign-in through the provider, so that someone the provider no longer lets in loses their tunnels. Off by default; [docs/admin.md](docs/admin.md) has the setup.
+
+### Changed
+
+- The dashboard has two new migrations (`user_identities`, `sso_connections`). They run with the usual `migrate` step of an upgrade and change nothing for an install without single sign-on.
+- The login page shows single sign-on only once a provider is in force; without one it looks as before.
 
 ## [0.2.0] - 2026-11-13
 
@@ -95,7 +102,8 @@ First public release.
 - The Helm chart's NetworkPolicy is on by default (`networkPolicy.type: kubernetes`) and needs `networkPolicy.ingressNamespace`, or `none` chosen on purpose.
 - The Compose install refuses requests that Docker relayed with the network's gateway as source (IPv6 or rootless Docker) outside the `internal` TLS mode, instead of treating all those visitors as one address.
 
-[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jkbennemann/exposehub/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jkbennemann/exposehub/releases/tag/v0.2.0
 [0.1.2]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jkbennemann/exposehub/releases/tag/v0.1.1
